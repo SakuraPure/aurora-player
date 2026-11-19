@@ -190,6 +190,14 @@ body[data-mode="stage"] .lyric { opacity: 0; }
 .pn-actions { display: flex; gap: 8px; margin: 0 4px 6px; }
 .pn-actions button { flex: 1; padding: 9px 0; border-radius: 10px; border: 1px solid var(--line); font-size: 12px; letter-spacing: 0.12em; }
 .pn-actions button:hover { border-color: rgba(255, 255, 255, 0.35); }
+/* 桌面版：已记住的音乐文件夹 */
+.pn-folders { list-style: none; margin: 2px 4px 4px; }
+.pn-folders li { display: flex; align-items: center; gap: 8px; padding: 3px 4px 3px 10px; font-size: 11px; color: var(--dim); }
+.pn-folders li::before { content: ''; flex: none; width: 10px; height: 8px; border: 1.2px solid currentColor; border-radius: 2px; opacity: 0.7; }
+.pn-folders span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pn-folders button { flex: none; width: 20px; height: 20px; border-radius: 50%; font-size: 13px; line-height: 1; color: var(--dim); opacity: 0; transition: opacity 0.2s; }
+.pn-folders li:hover button { opacity: 1; }
+.pn-folders button:hover { color: #fff; background: rgba(255, 255, 255, 0.08); }
 .pn-note { margin: 8px 8px 0; font-size: 11px; color: var(--dim); letter-spacing: 0.06em; }
 .pn-tracks li > i { flex: none; width: 22px; font-style: normal; font-size: 11px; color: var(--dim); text-align: right; font-variant-numeric: tabular-nums; }
 .pn-tracks li > div { flex: 1; min-width: 0; }

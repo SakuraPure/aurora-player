@@ -1,5 +1,6 @@
 // 曲库模型 + 本地音乐导入（读取标签与内嵌封面）+ LRC 歌词解析
 import { parseBlob } from 'music-metadata'
+import { convertFileSrc, invoke } from '@tauri-apps/api/core'
 
 export interface Track {
   key: string
@@ -9,7 +10,8 @@ export interface Track {
   album: string
   dur: number // 秒，0 = 未知
   cover?: string // 图片地址；无则用程序化封面
-  file?: File
+  file?: File // 网页版：拖入 / 选择的文件
+  path?: string // 桌面版：磁盘路径（经 media 协议流式播放）
   ncmId?: number
   vip?: boolean
 }
@@ -70,6 +72,17 @@ export async function readLocal(files: File[], onProgress?: (done: number, total
   }
   return out
 }
+
+// ---------- 桌面版：扫描记住的文件夹 / 文件（src-tauri/src/library.rs） ----------
+interface LocalRaw { path: string; title: string; artist: string; album: string; dur: number; cover: boolean }
+export async function scanPaths(paths: string[]): Promise<Track[]> {
+  const list = await invoke<LocalRaw[]>('local_scan', { paths })
+  return list.map((r) => ({
+    key: `local:${r.path}`, source: 'local', path: r.path, title: r.title, artist: r.artist, album: r.album, dur: r.dur,
+    cover: r.cover ? convertFileSrc(r.path, 'cover') : undefined,
+  }))
+}
+export const mediaUrl = (path: string) => convertFileSrc(path, 'media')
 
 export interface LrcLine { t: number; text: string; tr?: string }
 

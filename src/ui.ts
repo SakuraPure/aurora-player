@@ -1,6 +1,6 @@
 // DOM 界面：曲库面板（网易云扫码登录 / 搜索 / 歌单，本地导入）、底部播放器、歌词、提示
 import * as ncm from './ncm'
-import { fmt, filesFromDrop, readLocal, type Track, type TrackList } from './library'
+import { fmt, filesFromDrop, readLocal, scanPaths, type Track, type TrackList } from './library'
 import { coverSrc } from './covers'
 import type { Player } from './player'
 
@@ -20,7 +20,7 @@ export function initUI(player: Player, hooks: UIHooks) {
     account: $('pn-account'), qr: $('pn-qr'), qrImg: $<HTMLImageElement>('pn-qr-img'), qrMsg: $('pn-qr-msg'),
     search: $<HTMLFormElement>('pn-search'), q: $<HTMLInputElement>('pn-q'), lists: $('pn-lists'), local: $('pn-local'),
     listName: $('pn-list-name'), listCount: $('pn-list-count'), tracks: $('pn-tracks'),
-    inFolder: $<HTMLInputElement>('in-folder'), inFiles: $<HTMLInputElement>('in-files'),
+    inFolder: $<HTMLInputElement>('in-folder'), inFiles: $<HTMLInputElement>('in-files'), folders: $('pn-folders'), note: $('pn-note'),
     lyric: $('lyric'), toast: $('toast'), drop: $('drop'),
     img: $<HTMLImageElement>('np-img'), title: $('np-title'), artist: $('np-artist'), btn: $('np-btn'),
     cur: $('np-cur'), dur: $('np-dur'), seek: $('np-track'), fill: $('np-fill'), mode: $('np-mode'),
@@ -119,7 +119,7 @@ export function initUI(player: Player, hooks: UIHooks) {
   }
   const row = (s: Row) =>
     `<li data-id="${esc(s.id)}" class="${player.list.id === s.id ? 'on' : ''}">` +
-    (s.cover ? `<img src="${esc(s.cover)}?param=80y80" alt="" loading="lazy" />` : s.day ? `<i class="ph day">${s.day}</i>` : `<i class="ph"></i>`) +
+    (s.cover ? `<img src="${esc(/126\.net\/[^?]*$/.test(s.cover) ? `${s.cover}?param=80y80` : s.cover)}" alt="" loading="lazy" />` : s.day ? `<i class="ph day">${s.day}</i>` : `<i class="ph"></i>`) +
     `<span>${esc(s.name)}</span><small>${s.count ? `${s.count} 首` : ''}</small></li>`
   function renderLists() {
     el.lists.innerHTML = sources().map(row).join('')
@@ -139,7 +139,11 @@ export function initUI(player: Player, hooks: UIHooks) {
       renderLists()
     }
   })
-  el.local.addEventListener('click', () => { if (localTracks.length) useList({ id: 'local', name: '本地音乐', tracks: localTracks }, true) })
+  el.local.addEventListener('click', () => {
+    if (!localTracks.length) return
+    useList(localList(), true)
+    localStorage.setItem(LAST_KEY, JSON.stringify({ id: 'local', name: '本地音乐' }))
+  })
 
   el.search.addEventListener('submit', async (e) => {
     e.preventDefault()
@@ -160,34 +164,101 @@ export function initUI(player: Player, hooks: UIHooks) {
     if (showList && open) show('list')
   }
 
-  // ---------------- 本地导入 ----------------
+  // ---------------- 本地音乐 ----------------
+  // 网页版：读取拖入 / 选择的 File（刷新后丢失）
+  // 桌面版：记住添加的文件夹 / 文件路径，启动时重新扫描；音频经 media 协议从磁盘流式播放
+  const PATHS_KEY = 'local.paths'
+  let localPaths: string[] = []
+  try { if (ncm.inApp) localPaths = JSON.parse(localStorage.getItem(PATHS_KEY) || '[]') } catch { /* ignore */ }
+  const localList = (): TrackList => ({ id: 'local', name: '本地音乐', tracks: localTracks })
+
+  async function afterImport(added: Track[]) {
+    if (!localTracks.length) return toast('没有找到可播放的音频文件')
+    await useList(localList())
+    localStorage.setItem(LAST_KEY, JSON.stringify({ id: 'local', name: '本地音乐' }))
+    if (!added.length) return toast('这些音乐已经在曲库里了')
+    toast(`已导入 ${added.length} 首本地音乐`)
+    player.play(added[0])
+    hooks.locate(player.indexOf(added[0]))
+  }
+
   async function importLocal(files: File[]) {
     const tracks = await readLocal(files, (d, n) => n > 3 && toast(`正在读取本地音乐 ${d} / ${n}`, 4000))
     if (!tracks.length) return toast('没有找到可播放的音频文件')
     const known = new Set(localTracks.map((t) => t.key))
     const added = tracks.filter((t) => !known.has(t.key))
     localTracks = [...localTracks, ...added]
-    await useList({ id: 'local', name: '本地音乐', tracks: localTracks })
-    toast(`已导入 ${added.length} 首本地音乐`)
-    const first = added[0] || tracks[0]
-    player.play(first)
-    hooks.locate(player.indexOf(first))
+    await afterImport(added)
   }
-  $('pn-folder').addEventListener('click', () => el.inFolder.click())
-  $('pn-files').addEventListener('click', () => el.inFiles.click())
+
+  const savePaths = () => localStorage.setItem(PATHS_KEY, JSON.stringify(localPaths))
+  async function rescan() {
+    localTracks = localPaths.length ? await scanPaths(localPaths) : []
+    renderFolders()
+    renderLists()
+    if (player.list.id === 'local') player.setList(localList())
+  }
+  async function addPaths(paths: string[]) {
+    const fresh = paths.filter((p) => !localPaths.includes(p))
+    if (!fresh.length) return toast('这些位置已经添加过了')
+    localPaths = [...localPaths, ...fresh]
+    toast('正在读取本地音乐…', 8000)
+    const known = new Set(localTracks.map((t) => t.key))
+    try { await rescan() } catch (e) { return toast(`读取失败：${(e as Error).message}`) }
+    // 没有音频的路径不记住
+    const empty = fresh.filter((p) => !localTracks.some((t) => t.path!.startsWith(p)))
+    if (empty.length) localPaths = localPaths.filter((p) => !empty.includes(p))
+    savePaths()
+    renderFolders()
+    await afterImport(localTracks.filter((t) => !known.has(t.key)))
+  }
+  function renderFolders() {
+    el.folders.innerHTML = localPaths
+      .map((p, i) => `<li title="${esc(p)}"><span>${esc(p.split(/[\\/]/).filter(Boolean).pop() || p)}</span><button data-i="${i}" aria-label="移除">×</button></li>`)
+      .join('')
+  }
+  el.folders.addEventListener('click', async (e) => {
+    const b = (e.target as HTMLElement).closest('button')
+    if (!b) return
+    localPaths.splice(+b.dataset.i!, 1)
+    savePaths()
+    await rescan()
+    toast('已从曲库移除（不会删除文件）')
+  })
+
+  const AUDIO = ['mp3', 'flac', 'm4a', 'aac', 'ogg', 'oga', 'opus', 'wav', 'webm']
+  async function pick(directory: boolean) {
+    const dialog = await import('@tauri-apps/plugin-dialog')
+    const r = await dialog.open(directory
+      ? { directory: true, multiple: true, title: '选择音乐文件夹' }
+      : { multiple: true, title: '选择音频文件', filters: [{ name: '音频', extensions: AUDIO }] })
+    if (r) addPaths(Array.isArray(r) ? r : [r])
+  }
+  $('pn-folder').addEventListener('click', () => (ncm.inApp ? pick(true) : el.inFolder.click()))
+  $('pn-files').addEventListener('click', () => (ncm.inApp ? pick(false) : el.inFiles.click()))
   for (const input of [el.inFolder, el.inFiles]) {
     input.addEventListener('change', () => {
       if (input.files?.length) importLocal([...input.files])
       input.value = ''
     })
   }
-  addEventListener('dragover', (e) => { e.preventDefault(); el.drop.classList.add('show') })
-  addEventListener('dragleave', (e) => { if (!e.relatedTarget) el.drop.classList.remove('show') })
-  addEventListener('drop', (e) => {
-    e.preventDefault()
-    el.drop.classList.remove('show')
-    if (e.dataTransfer) filesFromDrop(e.dataTransfer).then(importLocal)
-  })
+  if (ncm.inApp) {
+    el.note.textContent = '添加的文件夹会被记住，下次启动自动载入；也可以直接拖进窗口'
+    import('@tauri-apps/api/webview').then(({ getCurrentWebview }) =>
+      getCurrentWebview().onDragDropEvent(({ payload: p }) => {
+        el.drop.classList.toggle('show', p.type === 'enter' || p.type === 'over')
+        if (p.type === 'drop' && p.paths.length) addPaths(p.paths)
+      }),
+    )
+  } else {
+    addEventListener('dragover', (e) => { e.preventDefault(); el.drop.classList.add('show') })
+    addEventListener('dragleave', (e) => { if (!e.relatedTarget) el.drop.classList.remove('show') })
+    addEventListener('drop', (e) => {
+      e.preventDefault()
+      el.drop.classList.remove('show')
+      if (e.dataTransfer) filesFromDrop(e.dataTransfer).then(importLocal)
+    })
+  }
 
   // ---------------- 列表视图 ----------------
   let renderedList: TrackList | null = null
@@ -308,12 +379,14 @@ export function initUI(player: Player, hooks: UIHooks) {
   renderLists()
   ncm.loadChartInfo().then(renderLists).catch(() => {})
   ;(async () => {
+    if (ncm.inApp && localPaths.length) await rescan().catch((e) => toast(`本地音乐读取失败：${(e as Error).message}`))
     await loadAccount()
     let last: { id: string; name: string } | null = null
     try { last = JSON.parse(localStorage.getItem(LAST_KEY) || 'null') } catch { /* ignore */ }
     const src = sources().find((s) => s.id === last?.id) || sources()[0]
     el.libName.textContent = '载入中…'
-    try { await useList(await src.load()) } catch (e) {
+    if (last?.id === 'local' && localTracks.length) await useList(localList())
+    else try { await useList(await src.load()) } catch (e) {
       toast(`网易云曲库载入失败：${(e as Error).message}`)
       renderNP()
     }

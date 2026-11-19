@@ -1,7 +1,7 @@
 // 播放控制：当前列表（= 音柱展示的曲库 = 播放队列）、上一首/下一首、播放模式、音量、歌词、系统媒体控件
 import { Spectrum } from './audio'
 import * as ncm from './ncm'
-import { parseLrc, withTranslation, type LrcLine, type Track, type TrackList } from './library'
+import { mediaUrl, parseLrc, withTranslation, type LrcLine, type Track, type TrackList } from './library'
 
 export type Mode = 'list' | 'shuffle' | 'one'
 const MODES: Mode[] = ['list', 'shuffle', 'one']
@@ -77,7 +77,9 @@ export class Player {
     this.emit()
     try {
       let url: string
-      if (tr.source === 'local') {
+      if (tr.source === 'local' && tr.path) {
+        url = mediaUrl(tr.path)
+      } else if (tr.source === 'local') {
         if (this.blobUrl) URL.revokeObjectURL(this.blobUrl)
         url = this.blobUrl = URL.createObjectURL(tr.file!)
       } else {
