@@ -37,5 +37,9 @@ lofty = "0.25"
 percent-encoding = "2"
 tauri-plugin-dialog = "2"
 
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+# 全局媒体键（播放/暂停、上一首、下一首）
+tauri-plugin-global-shortcut = "2"
+
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

@@ -7,6 +7,14 @@
   </head>
   <body data-mode="wave">
     <canvas id="gl"></canvas>
+    <!-- 桌面版：无边框窗口的拖动条与窗口按钮（网页版隐藏） -->
+    <div class="titlebar" data-tauri-drag-region>
+      <div class="win-ctrl">
+        <button id="win-min" aria-label="最小化"><svg viewBox="0 0 12 12"><path d="M2 6.5h8" /></svg></button>
+        <button id="win-max" aria-label="最大化"><svg viewBox="0 0 12 12"><rect x="2.5" y="2.5" width="7" height="7" rx="1" /></svg></button>
+        <button id="win-close" class="close" aria-label="关闭"><svg viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6" /></svg></button>
+      </div>
+    </div>
 
     <header class="brand">
       <span class="logo"><i></i><i></i><i></i><i></i></span>

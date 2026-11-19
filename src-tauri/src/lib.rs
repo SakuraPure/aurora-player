@@ -40,6 +40,8 @@ pub fn run() {
       std::thread::spawn(move || responder.respond(app.state::<library::Library>().cover(&req)));
     })
     .setup(|app| {
+      #[cfg(desktop)]
+      app.handle().plugin(tauri_plugin_global_shortcut::Builder::new().build())?;
       if cfg!(debug_assertions) {
         app.handle().plugin(
           tauri_plugin_log::Builder::default()

@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- AURORA 应用图标源文件：npx tauri icon src-tauri/app-icon.svg 生成各尺寸 -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0.35" y2="1">
+      <stop offset="0" stop-color="#191b23" />
+      <stop offset="1" stop-color="#06070a" />
+    </linearGradient>
+    <linearGradient id="aur" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#38fac8" />
+      <stop offset="0.4" stop-color="#429eff" />
+      <stop offset="0.72" stop-color="#9e6eff" />
+      <stop offset="1" stop-color="#ff75c7" />
+    </linearGradient>
+    <linearGradient id="up" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#fff" stop-opacity="1" />
+      <stop offset="1" stop-color="#fff" stop-opacity="0" />
+    </linearGradient>
+    <mask id="fade"><rect x="0" y="300" width="1024" height="440" fill="url(#up)" /></mask>
+    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="34" /></filter>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="10" /></filter>
+  </defs>
+  <rect x="64" y="64" width="896" height="896" rx="208" fill="url(#bg)" />
+  <rect x="64.5" y="64.5" width="895" height="895" rx="207.5" fill="none" stroke="#ffffff" stroke-opacity="0.07" stroke-width="3" />
+  <!-- 极光光晕：只在音柱后方，向上淡出 -->
+  <g filter="url(#soft)" opacity="0.75">
+    <rect x="236" y="300" width="552" height="440" rx="80" fill="url(#aur)" mask="url(#fade)" />
+  </g>
+  <!-- 音柱投影 + 白色音柱（与界面左上角标志同比例） -->
+  <g fill="#000" opacity="0.45" filter="url(#shadow)" transform="translate(14 18)">
+    <rect x="262" y="534" width="84" height="168" rx="20" />
+    <rect x="402" y="324" width="84" height="378" rx="20" />
+    <rect x="542" y="450" width="84" height="252" rx="20" />
+    <rect x="682" y="387" width="84" height="315" rx="20" />
+  </g>
+  <g fill="#f2f4f8">
+    <rect x="262" y="534" width="84" height="168" rx="20" />
+    <rect x="402" y="324" width="84" height="378" rx="20" />
+    <rect x="542" y="450" width="84" height="252" rx="20" />
+    <rect x="682" y="387" width="84" height="315" rx="20" />
+  </g>
+</svg>

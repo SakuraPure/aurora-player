@@ -214,6 +214,20 @@ body[data-mode="stage"] .lyric { opacity: 0; }
 .drop div { padding: 26px 40px; border: 1px dashed rgba(255, 255, 255, 0.4); border-radius: 18px; letter-spacing: 0.3em; }
 .drop.show { opacity: 1; }
 
+/* 桌面版：无边框窗口的拖动条 + 窗口按钮；其余顶部元素整体下移 */
+.titlebar { display: none; }
+body.app .titlebar { display: block; position: fixed; top: 0; left: 0; right: 0; height: 34px; }
+.win-ctrl { position: absolute; top: 0; right: 0; display: flex; }
+.win-ctrl button { width: 46px; height: 34px; display: grid; place-items: center; color: rgba(235, 242, 255, 0.55); transition: background 0.2s, color 0.2s; }
+.win-ctrl svg { width: 11px; height: 11px; fill: none; stroke: currentColor; stroke-width: 1.1; }
+.win-ctrl button:hover { color: #fff; background: rgba(255, 255, 255, 0.08); }
+.win-ctrl button.close:hover { background: rgba(232, 17, 35, 0.85); }
+body.app .brand { top: 42px; }
+body.app .top-r { top: 44px; }
+body.app .back { top: 40px; }
+body.app .hint { top: 92px; }
+body.app .panel { top: 40px; }
+
 @keyframes eq { from { transform: scaleY(0.35); } to { transform: scaleY(1); } }
 .logo i, .eq i { transform-origin: bottom; }
 body.is-paused .logo i { animation-play-state: paused; }

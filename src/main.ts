@@ -4,6 +4,7 @@ import { Player } from './player'
 import { fmt, type Track } from './library'
 import { coverCanvas, extractPalette, type RGB } from './covers'
 import { initUI } from './ui'
+import { inApp } from './ncm'
 import * as SH from './shaders'
 
 const N = 48 // 屏幕上的音柱数（循环复用）；音柱 id 不取模，滚动时依次对应曲库里的歌
@@ -246,6 +247,7 @@ const ui = {
   lbNo: $('lb-no'), lbTitle: $('lb-title'), lbAlbum: $('lb-album'), lbArtist: $('lb-artist'), lbDur: $('lb-dur'), lbCta: $('lb-cta'),
 }
 const app = initUI(player, { locate })
+if (inApp) import('./desktop').then((d) => d.initDesktop(player, app.toast))
 // 换了曲库：收起所有封面
 let shownList = player.list
 player.on(() => {
