@@ -29,9 +29,17 @@ uniform sampler2D uBgCur, uBgPrev;
 uniform vec4 uBgRect, uBgFull; // 中心 xy + 半宽高（世界坐标）
 uniform vec2 uView;            // 可视区半宽高
 uniform vec2 uBgRest;          // 背景位的羽化与模糊（prev 层固定用它）
+uniform vec3 uPal[4];          // 从封面取的拖尾渐变色（开关打开时替换默认极光色）
+uniform float uPalMix;
 uniform float uBgOn, uBgCurA, uBgPrevA, uBgAmb, uBgFeather, uBgLod, uBgK, uBgOp;
 varying vec2 vW;
 ${common}
+vec3 palC(float s){
+  s = clamp(s, 0., 1.);
+  vec3 c = mix(uPal[0], uPal[1], smoothstep(0.00, 0.40, s));
+  c = mix(c, uPal[2], smoothstep(0.35, 0.70, s));
+  return mix(c, uPal[3], smoothstep(0.70, 1.00, s));
+}
 // 高 mip 层 + 环形多点采样：便宜又平滑的大半径模糊
 vec3 soft(sampler2D t, vec2 uv, float lod, float r){
   vec3 c = textureLod(t, uv, lod).rgb;
@@ -130,7 +138,10 @@ void main(){
   float strip = smoothstep(-0.03, 0.03, s) * pow(fall, 1.6);
   float hmask = mix(1.0, smoothstep(px, -px, abs(lx) - uSlot * 0.5 * (1.0 - uGap)) * (1.0 - Ek.r), m);
   float tA = strip * smoothstep(0.01, 0.14, abs(gap)) * hmask * mix(lineFade, inRow, m);
-  vec3 tc = mix(aur(xn * 0.9 + 0.05 + 0.08 * sin(uTime * 0.3)), vec3(1.0), pow(fall, 8.0) * 0.4);
+  float hs = xn * 0.9 + 0.05 + 0.08 * sin(uTime * 0.3);
+  vec3 hue = aur(hs);
+  if (uPalMix > 0.001) hue = mix(hue, palC(hs), uPalMix);
+  vec3 tc = mix(hue, vec3(1.0), pow(fall, 8.0) * 0.4);
 
   col += tc * tA * 0.85;
   vec3 white = vec3(0.94, 0.95, 0.97) * mix(1.0, Ek.g, m);

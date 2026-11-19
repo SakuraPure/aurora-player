@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import './style.css'
 import { Player } from './player'
 import { fmt, type Track } from './library'
-import { coverCanvas } from './covers'
+import { coverCanvas, extractPalette, type RGB } from './covers'
 import { initUI } from './ui'
 import * as SH from './shaders'
 
@@ -42,6 +42,7 @@ const U = {
   uBgCur: { value: blankTex }, uBgPrev: { value: blankTex }, uBgRect: { value: new THREE.Vector4() }, uBgFull: { value: new THREE.Vector4() },
   uView: { value: new THREE.Vector2() }, uBgRest: { value: new THREE.Vector2(BG_FEATHER, BG_LOD) }, uBgOn: { value: 0 }, uBgCurA: { value: 0 },
   uBgPrevA: { value: 0 }, uBgAmb: { value: 0 }, uBgFeather: { value: BG_FEATHER }, uBgLod: { value: BG_LOD }, uBgK: { value: 0 }, uBgOp: { value: BG_OP },
+  uPal: { value: Array.from({ length: 4 }, () => new THREE.Vector3()) }, uPalMix: { value: 0 },
 }
 const stageMesh = new THREE.Mesh(
   new THREE.PlaneGeometry(1, 1),
@@ -282,6 +283,18 @@ let bgAnchor: number | null = null
 const bgSmall: Rect = { x: 0, y: 0, w: 0.1, h: 0.1 } // 吸收的目标 / 释放的起点
 const par = new THREE.Vector2() // 视差：背景随鼠标反向轻移，与静止的波形拉开层次
 const bgHi = new Map<string, CoverTex>()
+const palCache = new Map<string, RGB[] | null>() // 封面取色结果（null = 取不到，用默认极光色）
+
+/** 当前封面的拖尾配色：封面加载好后取一次并缓存 */
+function paletteOf(tr: Track, tex: CoverTex): RGB[] | null {
+  if (palCache.has(tr.key)) return palCache.get(tr.key)!
+  if (!tex.ready || !tex.tex.image) return null
+  let pal: RGB[] | null = null
+  try { pal = extractPalette(tex.tex.image as CanvasImageSource) } catch { /* 图片不可读：保持默认极光色 */ }
+  palCache.set(tr.key, pal)
+  if (palCache.size > 200) palCache.delete(palCache.keys().next().value!)
+  return pal
+}
 
 /** 背景用高清封面（网易云取 1024），未就绪前先用卡片的 512 */
 function bgTex(tr: Track): CoverTex {
@@ -380,6 +393,18 @@ function updateBg(dt: number) {
   U.uBgCur.value = cur?.tex ?? blankTex
   U.uBgPrev.value = bgPrev ? bgTex(bgPrev).tex : blankTex
   U.uBgOn.value = damp(U.uBgOn.value, bgEnabled && (bgCur || bgPrev) ? 1 : 0, 3, dt)
+
+  // 波形拖尾配色取自封面：换歌时颜色平滑过渡，开关关闭时淡回默认极光色
+  const pal = bgCur && cur ? paletteOf(bgCur, cur) : null
+  if (pal) {
+    const snap = U.uPalMix.value < 0.01 // 从默认色切入时直接就位，避免从黑色渐变
+    U.uPal.value.forEach((v, i) => {
+      const [r, g, b] = pal[i]
+      if (snap) v.set(r, g, b)
+      else v.set(damp(v.x, r, 2.4, dt), damp(v.y, g, 2.4, dt), damp(v.z, b, 2.4, dt))
+    })
+  }
+  U.uPalMix.value = damp(U.uPalMix.value, bgEnabled && pal ? 1 : 0, 3, dt)
 }
 
 const fxBtn = $('fx-bg')
@@ -658,5 +683,5 @@ if (import.meta.env.DEV) {
     simNow = Math.max(simNow, last)
     for (let i = 0; i < sec * 60; i++) tick((simNow += 1000 / 60))
   }
-  Object.assign(window, { __dbg: { run, freeze: (f: boolean) => { frozen = f }, onClick, cards, player, locate, get state() { return { barsT, stageT, morph, hovered, offset, bgK, bgDir, bgEnabled, bgCur: bgCur?.title, bgFade: bgCurFade } }, waveYAt } })
+  Object.assign(window, { __dbg: { run, freeze: (f: boolean) => { frozen = f }, onClick, cards, player, locate, get state() { return { barsT, stageT, morph, hovered, offset, bgK, bgDir, bgEnabled, bgCur: bgCur?.title, bgFade: bgCurFade, palMix: U.uPalMix.value, pal: U.uPal.value.map((v) => v.toArray().map((c) => +c.toFixed(2))) } }, waveYAt } })
 }

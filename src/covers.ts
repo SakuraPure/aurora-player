@@ -235,3 +235,89 @@ export function coverSrc(tr: Track) {
   const e = fallback(tr)
   return (e.url ||= e.cv.toDataURL('image/jpeg', 0.85))
 }
+
+// ---------------- 封面取色：给波形的极光拖尾用 ----------------
+export type RGB = [number, number, number]
+function rgb2hsv(r: number, g: number, b: number): RGB {
+  const mx = Math.max(r, g, b), d = mx - Math.min(r, g, b)
+  let h = 0
+  if (d) {
+    h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4
+    h /= 6
+    if (h < 0) h += 1
+  }
+  return [h, mx ? d / mx : 0, mx]
+}
+function hsv2rgb(h: number, s: number, v: number): RGB {
+  h = ((h % 1) + 1) % 1
+  const f = (n: number) => { const k = (n + h * 6) % 6; return v - v * s * Math.max(0, Math.min(k, 4 - k, 1)) }
+  return [f(5), f(3), f(1)]
+}
+const hueDist = (a: number, b: number) => { const d = Math.abs(a - b) % 1; return Math.min(d, 1 - d) }
+
+/**
+ * 从封面取 4 个渐变色：按色相直方图找主色峰（彩度加权），沿色相最短路径排序，
+ * 再提亮到适合"发光"的明度范围；几乎无彩色的封面给一组带主色调的银白。
+ */
+export function extractPalette(img: CanvasImageSource): RGB[] {
+  const S = 40, B = 36 // 缩到 40×40 采样；色相 36 桶（每桶 10°）
+  const cv = document.createElement('canvas')
+  cv.width = cv.height = S
+  const g = cv.getContext('2d', { willReadFrequently: true })!
+  g.drawImage(img, 0, 0, S, S)
+  const px = g.getImageData(0, 0, S, S).data // 跨域图片未授权时会抛错，由调用方兜底
+  const w = new Float32Array(B), hs = new Float32Array(B), ss = new Float32Array(B), vs = new Float32Array(B)
+  let chroma = 0
+  for (let i = 0; i < px.length; i += 4) {
+    const [h, s, v] = rgb2hsv(px[i] / 255, px[i + 1] / 255, px[i + 2] / 255)
+    chroma += s * v
+    if (v < 0.12 || s < 0.08) continue
+    const k = Math.min(B - 1, Math.floor(h * B)), wt = s * s * v // 偏向鲜艳的颜色
+    w[k] += wt; hs[k] += h * wt; ss[k] += s * wt; vs[k] += v * wt
+  }
+  chroma /= S * S
+  const smooth = Array.from(w, (_, k) => w[(k + B - 1) % B] + 2 * w[k] + w[(k + 1) % B])
+  const top = Math.max(...smooth)
+
+  // 几乎无彩色：银白渐变，带一点主色调
+  if (chroma < 0.05 || top <= 0) {
+    const k = smooth.indexOf(top), h = top > 0 ? hs[k] / w[k] || 0.6 : 0.6
+    return [hsv2rgb(h - 0.03, 0.1, 0.86), hsv2rgb(h, 0.16, 0.97), hsv2rgb(h + 0.03, 0.08, 1), hsv2rgb(h + 0.05, 0.14, 0.9)]
+  }
+
+  // 取最多 4 个相距 ≥ 40° 的色相峰
+  const picks: { h: number; s: number; v: number }[] = []
+  for (const k of [...smooth.keys()].sort((a, b) => smooth[b] - smooth[a])) {
+    if (picks.length >= 4 || smooth[k] < top * 0.08) break
+    const ks = [k, (k + 1) % B, (k + B - 1) % B], tw = ks.reduce((a, j) => a + w[j], 0)
+    if (!tw) continue
+    const avg = (arr: Float32Array) => ks.reduce((a, j) => a + arr[j], 0) / tw
+    let h = hs[k] / (w[k] || 1)
+    if (!w[k]) h = (k + 0.5) / B
+    if (picks.some((p) => hueDist(p.h, h) < 40 / 360)) continue
+    picks.push({ h, s: avg(ss), v: avg(vs) })
+  }
+  // 沿色相最短路径排序：从最大色相空隙之后开始
+  picks.sort((a, b) => a.h - b.h)
+  if (picks.length > 1) {
+    let gap = -1, at = 0
+    picks.forEach((p, i) => { const n = picks[(i + 1) % picks.length]; const d = (n.h - p.h + 1) % 1 || 1; if (d > gap) { gap = d; at = (i + 1) % picks.length } })
+    picks.push(...picks.splice(0, at))
+  } else {
+    const p = picks[0] // 只有一个主色：两侧做轻微色相偏移
+    picks.unshift({ ...p, h: p.h - 0.05, s: p.s * 0.8 })
+    picks.push({ ...p, h: p.h + 0.06 })
+  }
+  // 提亮：明度拉到发光区间，饱和度收在 0.4–0.8
+  const glow = (p: { h: number; s: number; v: number }): RGB =>
+    hsv2rgb(p.h, Math.min(0.8, Math.max(0.4, p.s * 1.25)), 0.5 + 0.5 * Math.max(p.v, 0.82))
+  const cols = picks.map(glow)
+  // 均匀取 4 个渐变节点；对比色之间插值会发灰，插值点按两端饱和度补回
+  return [0, 1, 2, 3].map((i) => {
+    const f = (i / 3) * (cols.length - 1), j = Math.min(Math.floor(f), cols.length - 2), t = f - j
+    const mixC = cols[j].map((c, n) => c + (cols[j + 1][n] - c) * t) as RGB
+    if (t < 0.01 || t > 0.99) return mixC
+    const [h, sat, v] = rgb2hsv(...mixC), s0 = rgb2hsv(...cols[j])[1], s1 = rgb2hsv(...cols[j + 1])[1]
+    return hsv2rgb(h, Math.max(sat, (s0 + (s1 - s0) * t) * 0.85), Math.max(v, 0.9))
+  })
+}
