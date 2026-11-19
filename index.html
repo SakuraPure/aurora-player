@@ -54,7 +54,10 @@
             <img id="pn-qr-img" alt="登录二维码" />
             <p id="pn-qr-msg">打开网易云音乐 App 扫码登录</p>
           </div>
-          <form class="pn-search" id="pn-search"><input id="pn-q" placeholder="搜索歌曲 / 歌手 / 专辑" autocomplete="off" /></form>
+          <form class="pn-search" id="pn-search">
+            <input id="pn-q" placeholder="搜索歌曲 / 歌手 / 专辑" autocomplete="off" />
+            <button type="button" class="pn-qmode" id="pn-qmode" title="切换搜索单曲 / 歌单">单曲</button>
+          </form>
           <ul class="pn-lists" id="pn-lists"></ul>
 
           <div class="pn-sec">本地音乐</div>
@@ -74,6 +77,16 @@
           <button class="pn-x" data-close aria-label="关闭">×</button>
         </div>
         <ol class="pn-tracks pn-scroll" id="pn-tracks"></ol>
+      </section>
+      <!-- 歌单浏览：推荐 / 分类 / 精品歌单、歌单搜索结果 -->
+      <section class="pn-view" id="pn-pls" hidden>
+        <div class="pn-head">
+          <button class="pn-back" id="pn-pls-back" aria-label="返回">←</button>
+          <b id="pn-pls-name"></b>
+          <button class="pn-x" data-close aria-label="关闭">×</button>
+        </div>
+        <div class="pn-chips" id="pn-chips" hidden></div>
+        <ul class="pn-lists pn-scroll" id="pn-pls-list"></ul>
       </section>
     </aside>
     <input type="file" id="in-folder" webkitdirectory multiple hidden />

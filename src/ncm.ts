@@ -8,7 +8,7 @@ let cookie = localStorage.getItem(COOKIE_KEY) || ''
 export const inApp = '__TAURI_INTERNALS__' in window
 
 export interface Profile { userId: number; nickname: string; avatarUrl: string }
-export interface PlaylistInfo { id: number; name: string; count: number; cover: string }
+export interface PlaylistInfo { id: number; name: string; count: number; cover: string; creator?: string }
 
 async function call<T = any>(fn: string, params: Record<string, unknown> = {}): Promise<T> {
   if (inApp) {
@@ -31,20 +31,30 @@ async function call<T = any>(fn: string, params: Record<string, unknown> = {}): 
 
 const https = (u?: string) => (u ? u.replace(/^http:\/\//, 'https://') : '')
 
-interface RawSong { id: number; name: string; ar?: { name: string }[]; al?: { name: string; picUrl?: string }; dt?: number; fee?: number }
+// 新接口用 ar / al / dt，私人漫游等老接口用 artists / album / duration
+interface RawAlbum { name: string; picUrl?: string }
+interface RawSong {
+  id: number; name: string; fee?: number
+  ar?: { name: string }[]; al?: RawAlbum; dt?: number
+  artists?: { name: string }[]; album?: RawAlbum; duration?: number
+}
 export function toTrack(s: RawSong): Track {
+  const al = s.al || s.album
   return {
     key: `ncm:${s.id}`,
     source: 'ncm',
     ncmId: s.id,
     title: s.name,
-    artist: (s.ar || []).map((a) => a.name).filter(Boolean).join(' / ') || '未知歌手',
-    album: s.al?.name || '',
-    dur: (s.dt || 0) / 1000,
-    cover: s.al?.picUrl ? `${https(s.al.picUrl)}?param=512y512` : undefined,
+    artist: (s.ar || s.artists || []).map((a) => a.name).filter(Boolean).join(' / ') || '未知歌手',
+    album: al?.name || '',
+    dur: (s.dt || s.duration || 0) / 1000,
+    cover: al?.picUrl ? `${https(al.picUrl)}?param=512y512` : undefined,
     vip: s.fee === 1,
   }
 }
+const toPl = (p: any): PlaylistInfo => ({
+  id: p.id, name: p.name, count: p.trackCount, cover: https(p.coverImgUrl || p.picUrl), creator: p.creator?.nickname,
+})
 
 export const loggedIn = () => /MUSIC_U=/.test(cookie)
 
@@ -93,7 +103,7 @@ export async function loadChartInfo() {
 }
 export async function userPlaylists(uid: number): Promise<PlaylistInfo[]> {
   const r = await call('user_playlist', { uid, limit: 60 })
-  return (r.playlist || []).map((p: any) => ({ id: p.id, name: p.name, count: p.trackCount, cover: https(p.coverImgUrl) }))
+  return (r.playlist || []).map(toPl)
 }
 export async function playlist(id: number, name: string): Promise<TrackList> {
   const r = await call('playlist_track_all', { id, limit: 500 })
@@ -106,6 +116,44 @@ export async function daily(): Promise<TrackList> {
 export async function search(keywords: string): Promise<Track[]> {
   const r = await call('cloudsearch', { keywords, limit: 60 })
   return (r.result?.songs || []).map(toTrack)
+}
+
+// ---------- 发现：推荐 / 分类 / 精品歌单、歌单搜索 ----------
+/** 私人雷达：固定歌单 id，登录后内容按个人口味生成 */
+export const RADAR_ID = 3136952023
+/** 推荐歌单：登录后用每日推荐歌单，否则用通用推荐 */
+export async function recommendPlaylists(): Promise<PlaylistInfo[]> {
+  if (loggedIn()) {
+    const r = await call('recommend_resource').catch(() => null)
+    if (r?.recommend?.length) return r.recommend.map(toPl)
+  }
+  const r = await call('personalized', { limit: 30 })
+  return (r.result || []).map(toPl)
+}
+export const CATS = ['全部', '华语', '欧美', '日语', '韩语', '粤语', '流行', '摇滚', '民谣', '电子', '说唱', '轻音乐', '古风', 'ACG', '影视原声', '爵士', '古典']
+/** 分类歌单（含云音乐官方歌单与用户创建的歌单），按热度 */
+export async function categoryPlaylists(cat: string, offset = 0): Promise<{ list: PlaylistInfo[]; more: boolean }> {
+  const r = await call('top_playlist', { cat, offset, limit: 40, order: 'hot' })
+  return { list: (r.playlists || []).map(toPl), more: !!r.more }
+}
+/** 精品歌单：before = 上一页最后一个歌单的更新时间 */
+export async function highQualityPlaylists(cat: string, before = 0): Promise<{ list: PlaylistInfo[]; more: boolean; before: number }> {
+  const r = await call('top_playlist_highquality', { cat, before, limit: 40 })
+  return { list: (r.playlists || []).map(toPl), more: !!r.more, before: r.lasttime || 0 }
+}
+export async function searchPlaylists(keywords: string, offset = 0): Promise<{ list: PlaylistInfo[]; more: boolean }> {
+  const r = await call('cloudsearch', { keywords, type: 1000, offset, limit: 40 })
+  const list = (r.result?.playlists || []).map(toPl)
+  return { list, more: offset + list.length < (r.result?.playlistCount || 0) }
+}
+
+// ---------- 私人漫游：一次取几首，快播完时由播放器继续取 ----------
+async function fmBatch(): Promise<Track[]> {
+  const r = await call('personal_fm')
+  return (r.data || []).map(toTrack)
+}
+export async function fm(): Promise<TrackList> {
+  return { id: 'ncm:fm', name: '私人漫游', tracks: await fmBatch(), more: fmBatch }
 }
 
 // ---------- 播放地址 / 歌词 ----------

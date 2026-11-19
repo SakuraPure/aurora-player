@@ -19,7 +19,8 @@ export function initUI(player: Player, hooks: UIHooks) {
     panel: $('panel'), sources: $('pn-sources'), listView: $('pn-list'),
     account: $('pn-account'), qr: $('pn-qr'), qrImg: $<HTMLImageElement>('pn-qr-img'), qrMsg: $('pn-qr-msg'),
     search: $<HTMLFormElement>('pn-search'), q: $<HTMLInputElement>('pn-q'), lists: $('pn-lists'), local: $('pn-local'),
-    listName: $('pn-list-name'), listCount: $('pn-list-count'), tracks: $('pn-tracks'),
+    listName: $('pn-list-name'), listCount: $('pn-list-count'), tracks: $('pn-tracks'), qmode: $('pn-qmode'),
+    plsView: $('pn-pls'), plsName: $('pn-pls-name'), chips: $('pn-chips'), plsList: $('pn-pls-list'),
     inFolder: $<HTMLInputElement>('in-folder'), inFiles: $<HTMLInputElement>('in-files'), folders: $('pn-folders'), note: $('pn-note'),
     lyric: $('lyric'), toast: $('toast'), drop: $('drop'),
     img: $<HTMLImageElement>('np-img'), title: $('np-title'), artist: $('np-artist'), btn: $('np-btn'),
@@ -39,9 +40,12 @@ export function initUI(player: Player, hooks: UIHooks) {
 
   // ---------------- 面板 ----------------
   let open = false
-  const show = (view: 'sources' | 'list') => {
+  type View = 'sources' | 'list' | 'pls'
+  let listFrom: View = 'sources' // 列表视图的返回目标：曲库首页或歌单浏览
+  const show = (view: View) => {
     el.sources.hidden = view !== 'sources'
     el.listView.hidden = view !== 'list'
+    el.plsView.hidden = view !== 'pls'
     if (view === 'list') renderTracks(true)
   }
   const openPanel = (view: 'sources' | 'list' = player.list.tracks.length ? 'list' : 'sources') => {
@@ -58,7 +62,8 @@ export function initUI(player: Player, hooks: UIHooks) {
   }
   el.libBtn.addEventListener('click', () => (open ? closePanel() : openPanel()))
   el.panel.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', closePanel))
-  $('pn-back').addEventListener('click', () => show('sources'))
+  $('pn-back').addEventListener('click', () => show(listFrom))
+  $('pn-pls-back').addEventListener('click', () => show('sources'))
 
   // ---------------- 网易云：账号 / 扫码登录 ----------------
   let profile: ncm.Profile | null = null
@@ -105,35 +110,59 @@ export function initUI(player: Player, hooks: UIHooks) {
     renderLists()
   }
 
-  // ---------------- 歌单列表 ----------------
-  type Row = { id: string; name: string; count?: number; cover?: string; day?: number }
-  type Source = Row & { load: () => Promise<TrackList> }
+  // ---------------- 曲库首页：为你推荐 / 榜单 / 发现歌单 / 我的歌单 ----------------
+  type Row = { id: string; name: string; count?: number; cover?: string; day?: number; glyph?: string; sub?: string; arrow?: boolean }
+  type Browse = { kind: 'rec' | 'cat' | 'hq' | 'search'; title: string; q?: string }
+  type Source = Row & { group: string; load?: () => Promise<TrackList>; browse?: Browse; radio?: boolean }
   let localTracks: Track[] = []
   function sources(): Source[] {
-    const pl = (p: ncm.PlaylistInfo): Source => ({ id: `ncm:pl:${p.id}`, name: p.name, count: p.count || undefined, cover: p.cover, load: () => ncm.playlist(p.id, p.name) })
+    const pl = (group: string) => (p: ncm.PlaylistInfo): Source => ({
+      group, id: `ncm:pl:${p.id}`, name: p.name, count: p.count || undefined, cover: p.cover, load: () => ncm.playlist(p.id, p.name),
+    })
+    const rec: Source = { group: profile ? '为你推荐' : '发现歌单', id: 'browse:rec', name: '推荐歌单', glyph: '荐', arrow: true, browse: { kind: 'rec', title: '推荐歌单' } }
+    const forYou: Source[] = profile
+      ? [
+          { group: '为你推荐', id: 'ncm:fm', name: '私人漫游', glyph: '∞', sub: '按你的口味连续播放', radio: true, load: ncm.fm },
+          { group: '为你推荐', id: 'ncm:daily', name: '每日推荐', day: new Date().getDate(), load: ncm.daily },
+          { group: '为你推荐', id: `ncm:pl:${ncm.RADAR_ID}`, name: '私人雷达', glyph: '◎', load: () => ncm.playlist(ncm.RADAR_ID, '私人雷达') },
+          rec,
+        ]
+      : []
     return [
-      ...ncm.CHARTS.map(pl),
-      ...(profile ? [{ id: 'ncm:daily', name: '每日推荐', day: new Date().getDate(), load: ncm.daily } as Source] : []),
-      ...playlists.map(pl),
+      ...forYou,
+      ...ncm.CHARTS.map(pl('榜单')),
+      ...(profile ? [] : [rec]),
+      { group: '发现歌单', id: 'browse:cat', name: '分类歌单', glyph: '类', sub: '官方歌单与用户创建的歌单', arrow: true, browse: { kind: 'cat', title: '分类歌单' } },
+      { group: '发现歌单', id: 'browse:hq', name: '精品歌单', glyph: '精', arrow: true, browse: { kind: 'hq', title: '精品歌单' } },
+      ...playlists.map(pl('我的歌单')),
     ]
   }
+  const thumb = (u: string) => esc(/126\.net\/[^?]*$/.test(u) ? `${u}?param=80y80` : u)
+  const tile = (s: Row) =>
+    s.cover ? `<img src="${thumb(s.cover)}" alt="" loading="lazy" />`
+    : s.day ? `<i class="ph day">${s.day}</i>`
+    : s.glyph ? `<i class="ph glyph">${esc(s.glyph)}</i>`
+    : `<i class="ph"></i>`
   const row = (s: Row) =>
-    `<li data-id="${esc(s.id)}" class="${player.list.id === s.id ? 'on' : ''}">` +
-    (s.cover ? `<img src="${esc(/126\.net\/[^?]*$/.test(s.cover) ? `${s.cover}?param=80y80` : s.cover)}" alt="" loading="lazy" />` : s.day ? `<i class="ph day">${s.day}</i>` : `<i class="ph"></i>`) +
-    `<span>${esc(s.name)}</span><small>${s.count ? `${s.count} 首` : ''}</small></li>`
+    `<li data-id="${esc(s.id)}" class="${player.list.id === s.id ? 'on' : ''}">${tile(s)}` +
+    `<span>${esc(s.name)}${s.sub ? `<em>${esc(s.sub)}</em>` : ''}</span><small>${s.count ? `${s.count} 首` : s.arrow ? '›' : ''}</small></li>`
   function renderLists() {
-    el.lists.innerHTML = sources().map(row).join('')
+    let group = ''
+    el.lists.innerHTML = sources().map((s) => (s.group !== group ? `<li class="pn-sub">${esc((group = s.group))}</li>` : '') + row(s)).join('')
     el.local.innerHTML = localTracks.length ? row({ id: 'local', name: '本地音乐', count: localTracks.length, cover: localTracks.find((t) => t.cover)?.cover }) : ''
   }
   el.lists.addEventListener('click', async (e) => {
     const li = (e.target as HTMLElement).closest('li')
     const src = li && sources().find((s) => s.id === li.dataset.id)
     if (!src) return
-    const small = li.querySelector('small')!
-    small.textContent = '载入中…'
+    if (src.browse) return openBrowse(src.browse)
+    li.querySelector('small')!.textContent = '载入中…'
     try {
-      await useList(await src.load(), true)
+      const list = await src.load!()
+      listFrom = 'sources'
+      await useList(list, true)
       localStorage.setItem(LAST_KEY, JSON.stringify({ id: src.id, name: src.name }))
+      if (src.radio && list.tracks[0]) { player.play(list.tracks[0]); hooks.locate(0) } // 电台：点开即播
     } catch (err) {
       toast(`载入失败：${(err as Error).message}`)
       renderLists()
@@ -141,20 +170,104 @@ export function initUI(player: Player, hooks: UIHooks) {
   })
   el.local.addEventListener('click', () => {
     if (!localTracks.length) return
+    listFrom = 'sources'
     useList(localList(), true)
     localStorage.setItem(LAST_KEY, JSON.stringify({ id: 'local', name: '本地音乐' }))
   })
 
+  // ---------------- 搜索：单曲 / 歌单 ----------------
+  let qMode: 'song' | 'pl' = 'song'
+  el.qmode.addEventListener('click', () => {
+    qMode = qMode === 'song' ? 'pl' : 'song'
+    el.qmode.textContent = qMode === 'song' ? '单曲' : '歌单'
+    el.q.placeholder = qMode === 'song' ? '搜索歌曲 / 歌手 / 专辑' : '搜索歌单（官方或用户创建）'
+    el.q.focus()
+  })
   el.search.addEventListener('submit', async (e) => {
     e.preventDefault()
     const q = el.q.value.trim()
     if (!q) return
     el.q.blur()
+    if (qMode === 'pl') return openBrowse({ kind: 'search', title: `歌单 · ${q}`, q })
     try {
       const tracks = await ncm.search(q)
       if (!tracks.length) return toast('没有找到相关歌曲')
+      listFrom = 'sources'
       useList({ id: `ncm:search:${q}`, name: `搜索 · ${q}`, tracks }, true)
     } catch (err) { toast(`搜索失败：${(err as Error).message}`) }
+  })
+
+  // ---------------- 歌单浏览：推荐 / 分类（含官方）/ 精品 / 搜索结果，可加载更多 ----------------
+  type Pls = Browse & { cat: string; items: ncm.PlaylistInfo[]; more: boolean; offset: number; before: number; loading: boolean }
+  let pls: Pls | null = null
+  function openBrowse(b: Browse) {
+    pls = { ...b, cat: '全部', items: [], more: false, offset: 0, before: 0, loading: false }
+    el.plsName.textContent = b.title
+    show('pls')
+    el.plsList.scrollTop = 0
+    renderChips()
+    loadPls()
+  }
+  function renderChips() {
+    const on = !!pls && (pls.kind === 'cat' || pls.kind === 'hq')
+    el.chips.hidden = !on
+    if (on) el.chips.innerHTML = ncm.CATS.map((c) => `<button class="${c === pls!.cat ? 'on' : ''}" data-cat="${esc(c)}">${esc(c)}</button>`).join('')
+  }
+  el.chips.addEventListener('click', (e) => {
+    const b = (e.target as HTMLElement).closest('button')
+    if (!b || !pls || b.dataset.cat === pls.cat) return
+    pls = { ...pls, cat: b.dataset.cat!, items: [], more: false, offset: 0, before: 0, loading: false }
+    el.plsList.scrollTop = 0
+    renderChips()
+    loadPls()
+  })
+  async function loadPls() {
+    const st = pls
+    if (!st || st.loading) return
+    st.loading = true
+    renderPls()
+    try {
+      let r: { list: ncm.PlaylistInfo[]; more: boolean }
+      if (st.kind === 'rec') r = { list: await ncm.recommendPlaylists(), more: false }
+      else if (st.kind === 'cat') r = await ncm.categoryPlaylists(st.cat, st.offset)
+      else if (st.kind === 'hq') { const h = await ncm.highQualityPlaylists(st.cat, st.before); st.before = h.before; r = h }
+      else r = await ncm.searchPlaylists(st.q!, st.offset)
+      const known = new Set(st.items.map((p) => p.id))
+      st.items.push(...r.list.filter((p) => !known.has(p.id)))
+      st.offset += r.list.length
+      st.more = r.more && r.list.length > 0
+    } catch (err) {
+      if (pls === st) toast(`载入失败：${(err as Error).message}`)
+    }
+    st.loading = false
+    if (pls === st) renderPls()
+  }
+  function renderPls() {
+    if (!pls) return
+    const rows = pls.items.map((p) =>
+      `<li data-pl="${p.id}">${tile({ ...p, id: String(p.id) })}<span>${esc(p.name)}<em>${p.creator ? `${esc(p.creator)} · ` : ''}${p.count} 首</em></span></li>`).join('')
+    const tail = pls.loading ? `<li class="pn-empty">载入中…</li>`
+      : pls.more ? `<li class="pn-more" data-more>加载更多</li>`
+      : pls.items.length ? '' : `<li class="pn-empty">没有找到歌单</li>`
+    el.plsList.innerHTML = rows + tail
+  }
+  el.plsList.addEventListener('click', async (e) => {
+    const li = (e.target as HTMLElement).closest('li')
+    if (!li || !pls) return
+    if (li.dataset.more !== undefined) return loadPls()
+    const p = pls.items.find((x) => x.id === +li.dataset.pl!)
+    if (!p) return
+    const em = li.querySelector('em')!
+    em.textContent = '载入中…'
+    try {
+      const list = await ncm.playlist(p.id, p.name)
+      listFrom = 'pls'
+      await useList(list, true)
+      localStorage.setItem(LAST_KEY, JSON.stringify({ id: list.id, name: p.name }))
+    } catch (err) {
+      toast(`载入失败：${(err as Error).message}`)
+      renderPls()
+    }
   })
 
   async function useList(list: TrackList, showList = false) {
@@ -383,10 +496,13 @@ export function initUI(player: Player, hooks: UIHooks) {
     await loadAccount()
     let last: { id: string; name: string } | null = null
     try { last = JSON.parse(localStorage.getItem(LAST_KEY) || 'null') } catch { /* ignore */ }
-    const src = sources().find((s) => s.id === last?.id) || sources()[0]
+    // 上次的歌单：曲库首页里的条目、或从歌单浏览 / 搜索里打开过的任意歌单；默认热歌榜
+    const chart = sources().find((s) => s.id === `ncm:pl:${ncm.CHARTS[0].id}`)!
+    let load = sources().find((s) => s.id === last?.id && s.load)?.load
+    if (!load && last?.id.startsWith('ncm:pl:')) load = () => ncm.playlist(+last!.id.slice(7), last!.name)
     el.libName.textContent = '载入中…'
     if (last?.id === 'local' && localTracks.length) await useList(localList())
-    else try { await useList(await src.load()) } catch (e) {
+    else try { await useList(await (load || chart.load!)()) } catch (e) {
       toast(`网易云曲库载入失败：${(e as Error).message}`)
       renderNP()
     }

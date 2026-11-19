@@ -1,4 +1,4 @@
-//! 网易云音乐客户端（桌面版）：移植自 NeteaseCloudMusicApi 中本项目用到的 13 个接口。
+//! 网易云音乐客户端（桌面版）：移植自 NeteaseCloudMusicApi 中本项目用到的 18 个接口。
 //! 全部走 weapi 通道（AES-128-CBC 两次 + RSA 无填充）——匿名状态下默认的 eapi 播放地址会被风控（-460），weapi 正常。
 //! 登录 cookie 由前端保存，每次调用时传入；这里只负责补齐网易云要求的设备 cookie、加密、发请求。
 
@@ -173,6 +173,20 @@ impl Ncm {
                 self.req("/api/v3/song/detail", json!({ "c": ids_c(&ids) }), cookie).await
             }
             "recommend_songs" => self.req("/api/v3/discovery/recommend/songs", json!({}), cookie).await,
+            // 发现：推荐歌单 / 分类歌单（含官方歌单）/ 精品歌单 / 每日推荐歌单（需登录）
+            "personalized" => self.req("/api/personalized/playlist", json!({ "limit": n("limit", 30), "total": true, "n": 1000 }), cookie).await,
+            "top_playlist" => {
+                let cat = if s("cat").is_empty() { "全部".to_string() } else { s("cat") };
+                let order = if s("order").is_empty() { "hot".to_string() } else { s("order") };
+                self.req("/api/playlist/list", json!({ "cat": cat, "order": order, "limit": n("limit", 50), "offset": n("offset", 0), "total": true }), cookie).await
+            }
+            "top_playlist_highquality" => {
+                let cat = if s("cat").is_empty() { "全部".to_string() } else { s("cat") };
+                self.req("/api/playlist/highquality/list", json!({ "cat": cat, "limit": n("limit", 50), "lasttime": n("before", 0), "total": true }), cookie).await
+            }
+            "recommend_resource" => self.req("/api/v1/discovery/recommend/resource", json!({}), cookie).await,
+            // 私人漫游（私人 FM）：每次返回几首，播放器快播完时再取
+            "personal_fm" => self.req("/api/v1/radio/get", json!({}), cookie).await,
             "toplist" => self.req("/api/toplist", json!({}), cookie).await,
             "login_qr_key" => {
                 let body = self.req("/api/login/qrcode/unikey", json!({ "type": 3 }), cookie).await?;
@@ -250,5 +264,15 @@ mod tests {
         assert_eq!(c["code"], 801);
         let a = ncm.call("user_account", &json!({}), "").await.unwrap();
         assert!(a["profile"].is_null());
+        let p = ncm.call("personalized", &json!({ "limit": 3 }), "").await.unwrap();
+        assert!(p["result"].as_array().is_some_and(|a| !a.is_empty()));
+        let hq = ncm.call("top_playlist_highquality", &json!({ "cat": "华语", "limit": 3 }), "").await.unwrap();
+        assert!(hq["playlists"].as_array().is_some_and(|a| !a.is_empty()));
+        let tp = ncm.call("top_playlist", &json!({ "cat": "民谣", "limit": 3 }), "").await.unwrap();
+        assert!(tp["playlists"].as_array().is_some_and(|a| !a.is_empty()));
+        let sp = ncm.call("cloudsearch", &json!({ "keywords": "城市夜晚", "type": 1000, "limit": 3 }), "").await.unwrap();
+        assert!(sp["result"]["playlists"].as_array().is_some_and(|a| !a.is_empty()));
+        let fm = ncm.call("personal_fm", &json!({}), "").await.unwrap();
+        assert!(fm["data"].as_array().is_some_and(|a| !a.is_empty()), "fm: {fm}");
     }
 }

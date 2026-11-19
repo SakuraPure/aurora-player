@@ -112,6 +112,22 @@ export class Player {
     this.loading = false
     this.updateSession()
     this.emit()
+    if (this.list.more && this.indexOf() >= this.list.tracks.length - 2) this.extend() // 电台：提前取下一批
+  }
+
+  /** 电台式列表（私人漫游）：取下一批追加到列表末尾（去重） */
+  private extending: Promise<void> | null = null
+  private extend() {
+    const list = this.list
+    if (!list.more) return Promise.resolve()
+    return (this.extending ??= list.more()
+      .then((add) => {
+        const known = new Set(list.tracks.map((t) => t.key))
+        list.tracks.push(...add.filter((t) => !known.has(t.key)))
+        this.emit()
+      })
+      .catch(() => {})
+      .finally(() => { this.extending = null }))
   }
 
   private skipAfterFail() {
@@ -126,12 +142,15 @@ export class Player {
     else this.spectrum.pause()
   }
 
-  next(auto = false) {
-    const ts = this.list.tracks
+  async next(auto = false) {
+    const list = this.list
+    if (list.more && this.indexOf() >= list.tracks.length - 1) await this.extend() // 电台播到末尾：先取下一批
+    if (list !== this.list) return
+    const ts = list.tracks
     if (!ts.length) return
     const i = this.indexOf()
     let j = (i + 1) % ts.length
-    if (this.mode === 'shuffle' && ts.length > 1) do j = Math.floor(Math.random() * ts.length); while (j === i)
+    if (this.mode === 'shuffle' && !list.more && ts.length > 1) do j = Math.floor(Math.random() * ts.length); while (j === i)
     this.play(ts[j], auto)
   }
   prev() {

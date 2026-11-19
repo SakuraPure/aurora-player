@@ -15,7 +15,11 @@ export interface Track {
   ncmId?: number
   vip?: boolean
 }
-export interface TrackList { id: string; name: string; tracks: Track[] }
+export interface TrackList {
+  id: string; name: string; tracks: Track[]
+  /** 电台式列表（私人漫游）：播到末尾前继续取歌追加 */
+  more?: () => Promise<Track[]>
+}
 
 export const fmt = (s: number) => (isFinite(s) && s > 0 ? `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}` : '0:00')
 

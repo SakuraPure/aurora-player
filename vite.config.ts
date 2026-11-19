@@ -5,6 +5,7 @@ import { createRequire } from 'node:module'
 // 前端 POST /api/ncm/<接口名>，登录 cookie 由前端保存并通过 x-ncm-cookie 头带上。
 const ALLOW = new Set([
   'cloudsearch', 'song_detail', 'song_url_v1', 'lyric', 'playlist_track_all', 'recommend_songs', 'toplist',
+  'personalized', 'top_playlist', 'top_playlist_highquality', 'recommend_resource', 'personal_fm',
   'login_qr_key', 'login_qr_create', 'login_qr_check', 'user_account', 'user_playlist', 'logout',
 ])
 // 这些参数会改变请求的去向或身份，不接受前端传入

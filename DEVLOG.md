@@ -24,7 +24,7 @@
 | `src/ui.ts` | DOM 界面：曲库面板、底部播放器、歌词行、提示 |
 | `src/covers.ts` | 程序化兜底封面（无封面的本地歌曲、网络封面加载失败时）、封面取色 |
 | `src/desktop.ts` | 桌面版专属：无边框窗口按钮、全局媒体键 |
-| `src-tauri/src/ncm.rs` | 桌面版网易云接口：13 个接口的 Rust 实现（weapi 加密），与网页版中间层同名同参 |
+| `src-tauri/src/ncm.rs` | 桌面版网易云接口：18 个接口的 Rust 实现（weapi 加密），与网页版中间层同名同参 |
 | `src-tauri/src/library.rs` | 桌面版本地曲库：扫描记住的路径、读标签（lofty）、`media` / `cover` 自定义协议（Range + CORS） |
 | `src-tauri/src/lib.rs` | Tauri 入口：注册命令、协议、插件（对话框、全局快捷键） |
 
@@ -95,6 +95,18 @@
 - 应用图标：深色圆角方块 + 四根白色音柱 + 背后极光光晕（源文件 `src-tauri/app-icon.svg`）
 - 打包：NSIS 安装包
 
+### v0.7.0 网易云发现：私人漫游、私人雷达、推荐 / 分类 / 精品歌单、歌单搜索
+- 曲库首页分组：为你推荐（登录后）/ 榜单 / 发现歌单 / 我的歌单
+  - 为你推荐：私人漫游、每日推荐、私人雷达、推荐歌单（登录后为每日推荐歌单，未登录为通用推荐歌单）
+  - 发现歌单：分类歌单（17 个分类，含云音乐官方歌单与用户创建的歌单，按热度）、精品歌单
+- 私人漫游做成电台：点开即播；快播完时自动取下一批追加（去重），播到末尾也不会停；电台列表不参与随机播放
+- 新增歌单浏览视图：分类小标签切换、"加载更多"分页（分类 / 搜索按偏移，精品歌单按上一页最后更新时间）；
+  从歌单浏览打开的列表，返回键回到歌单浏览
+- 搜索框加"单曲 / 歌单"切换：歌单搜索可找到其他用户创建的歌单
+- 上次打开的任意歌单（包括从浏览 / 搜索打开的）启动时都能恢复
+- 新增 5 个接口：personalized、top_playlist、top_playlist_highquality、recommend_resource、personal_fm（网页版中间层与 Rust 同步；Rust 联网测试覆盖）
+- 私人漫游返回老格式歌曲（artists / album / duration），曲目转换同时兼容新老格式
+
 ---
 
 ## 踩坑记录
@@ -106,6 +118,7 @@
 - **尺寸为 0 时的 NaN 污染**：`resize` 里 0/0 得到 NaN，会经由各种 `damp` 永久残留在平滑状态里；尺寸为 0 时直接跳过
 - **Tauri 拖放**：窗口默认拦截文件拖放，网页的 `drop` 事件收不到；桌面版改用 `onDragDropEvent` 拿到磁盘路径（正好用于记住文件夹）
 - **自定义协议播放音频**：`<audio crossOrigin>` 跨域到 `http://media.localhost` 需要 `Access-Control-Allow-Origin`，拖动进度需要正确的 206 + `Content-Range`；单次 Range 最多返回 4 MB
+- **已安装的客户端与开发版共用数据目录**（标识符 com.aurora.player）：安装版运行时再用不同的 WebView2 启动参数开开发版会报 0x8007139F；开发调试前先关掉安装版
 - **调试桌面版页面**：启动前设 `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9333` 可用 CDP 执行脚本 / 截图；9222 常被本机 Chrome 占用，换别的端口
 - **浏览器面板隐藏时 rAF 不运行**：开发模式下提供 `__dbg.run(秒, ndcX, ndcY)` 手动推进帧，用于自动化验证
 
