@@ -1,13 +1,24 @@
-// 网易云音乐客户端：经本地中间层（vite.config.ts）调用非官方接口。
+// 网易云音乐客户端（非官方接口）：
+//   网页版 → 本地开发服务器中间层（vite.config.ts）
+//   桌面版 → Tauri 的 Rust 实现（src-tauri/src/ncm.rs），接口名与参数相同
 import type { Track, TrackList } from './library'
 
 const COOKIE_KEY = 'ncm.cookie'
 let cookie = localStorage.getItem(COOKIE_KEY) || ''
+export const inApp = '__TAURI_INTERNALS__' in window
 
 export interface Profile { userId: number; nickname: string; avatarUrl: string }
 export interface PlaylistInfo { id: number; name: string; count: number; cover: string }
 
 async function call<T = any>(fn: string, params: Record<string, unknown> = {}): Promise<T> {
+  if (inApp) {
+    const { invoke } = await import('@tauri-apps/api/core')
+    try {
+      return await invoke<T>('ncm_call', { fnName: fn, params, cookie })
+    } catch (e) {
+      throw new Error(String(e))
+    }
+  }
   const r = await fetch(`/api/ncm/${fn}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-ncm-cookie': cookie },

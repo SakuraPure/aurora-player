@@ -50,4 +50,8 @@ function ncm(): Plugin {
   }
 }
 
-export default defineConfig({ plugins: [ncm()] })
+export default defineConfig({
+  plugins: [ncm()],
+  clearScreen: false,
+  server: { watch: { ignored: ['**/src-tauri/**'] } }, // 不监听 Rust 构建产物
+})

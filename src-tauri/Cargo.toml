@@ -1,0 +1,37 @@
+[package]
+name = "aurora"
+version = "0.5.1"
+description = "AURORA 极光韵境音乐播放器"
+authors = ["SakuraPure"]
+license = ""
+repository = ""
+edition = "2024"
+rust-version = "1.90"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.7.6", features = [] }
+
+[dependencies]
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+log = "0.4"
+tauri = { version = "2.12.7", features = [] }
+tauri-plugin-log = "2"
+# 网易云接口：HTTP + weapi 加密（AES-CBC + RSA）+ 登录二维码
+reqwest = { version = "0.12", features = ["json", "gzip"] }
+aes = "0.8"
+cbc = { version = "0.1", features = ["alloc"] }
+num-bigint = "0.4"
+base64 = "0.22"
+hex = "0.4"
+rand = "0.8"
+qrcode = { version = "0.14", default-features = false, features = ["svg"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
