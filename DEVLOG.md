@@ -7,6 +7,7 @@
 - 网页版：`npm run dev`（网易云接口挂在开发服务器上，`npm run preview` 同样可用；纯静态部署 `dist/` 没有网易云功能）
 - 桌面版：`npm run tauri dev` 开发；`npm run tauri build -- --bundles nsis` 生成 Windows 安装包（`src-tauri/target/release/bundle/nsis/`）
 - 视觉原则：简约现代；光晕只作为运动反馈出现，立体感只靠阴影，不用 bloom
+- 网易云接口维护文档：[docs/netease-api.md](docs/netease-api.md)（结构、加密、接口清单、新增接口步骤、故障排查）
 
 ---
 
@@ -122,6 +123,10 @@
 - 未登录时也请求极高（实测免费歌曲匿名可拿到 320k），不再固定为标准
 - 本地歌曲按钮显示文件格式（FLAC / MP3 等）
 - Rust 联网测试加入音质降级检查
+
+### 文档：网易云接口维护文档
+- 新增 `docs/netease-api.md`：两套实现（网页版中间层 / 桌面版 Rust）的结构与调用约定、weapi 加密细节、18 个接口的路径 / 参数 / 返回 / 是否需登录、
+  新老歌曲格式、登录与 cookie、音质档位与降级、CDN 跨域、播放器容错、测试方法、新增接口步骤、故障排查与跟进上游的方法
 
 ---
 
