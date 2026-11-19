@@ -20,6 +20,7 @@ export function initUI(player: Player, hooks: UIHooks) {
     account: $('pn-account'), qr: $('pn-qr'), qrImg: $<HTMLImageElement>('pn-qr-img'), qrMsg: $('pn-qr-msg'),
     search: $<HTMLFormElement>('pn-search'), q: $<HTMLInputElement>('pn-q'), lists: $('pn-lists'), local: $('pn-local'),
     listName: $('pn-list-name'), listCount: $('pn-list-count'), tracks: $('pn-tracks'), qmode: $('pn-qmode'),
+    filter: $<HTMLInputElement>('pn-filter'),
     plsView: $('pn-pls'), plsName: $('pn-pls-name'), chips: $('pn-chips'), plsList: $('pn-pls-list'),
     inFolder: $<HTMLInputElement>('in-folder'), inFiles: $<HTMLInputElement>('in-files'), folders: $('pn-folders'), note: $('pn-note'),
     lyric: $('lyric'), toast: $('toast'), drop: $('drop'),
@@ -374,24 +375,54 @@ export function initUI(player: Player, hooks: UIHooks) {
   }
 
   // ---------------- 列表视图 ----------------
-  let renderedList: TrackList | null = null
+  let renderedList: TrackList | null = null, renderedCount = 0
   function renderTracks(scroll = false) {
     const { list, current } = player
     el.listName.textContent = list.name
-    el.listCount.textContent = list.tracks.length ? `${list.tracks.length} 首` : ''
-    if (renderedList !== list) {
+    if (renderedList !== list) el.filter.value = '' // 换了列表：清空列表内搜索
+    // 列表对象变了、或电台追加了新歌时重绘
+    if (renderedList !== list || renderedCount !== list.tracks.length) {
       renderedList = list
+      renderedCount = list.tracks.length
       el.tracks.innerHTML = list.tracks.length
         ? list.tracks.map((t, i) =>
-          `<li data-i="${i}"><i>${i + 1}</i><div><b>${esc(t.title)}</b><em>${esc(t.artist)}${t.album ? ` · ${esc(t.album)}` : ''}</em></div><small>${t.dur ? fmt(t.dur) : ''}</small></li>`).join('')
+          `<li data-i="${i}"><i>${i + 1}</i><div><b>${esc(t.title)}</b><em>${esc(t.artist)}${t.album ? ` · ${esc(t.album)}` : ''}</em></div><small>${t.dur ? fmt(t.dur) : ''}</small></li>`).join('') +
+          `<li class="pn-empty" data-nomatch hidden>没有匹配的歌曲</li>`
         : `<li class="pn-empty">列表为空</li>`
     }
+    applyFilter()
     const ci = player.indexOf(current)
     el.tracks.querySelector('li.on')?.classList.remove('on')
     const on = el.tracks.children[ci] as HTMLElement | undefined
     on?.classList.add('on')
     if (scroll && on) on.scrollIntoView({ block: 'center' })
   }
+  // 列表内搜索：空格分隔的每个关键词都要命中歌名 / 歌手 / 专辑（不分大小写、全半角）
+  const norm = (s: string) => s.normalize('NFKC').toLowerCase()
+  function applyFilter() {
+    const ts = player.list.tracks
+    const terms = norm(el.filter.value).split(/\s+/).filter(Boolean)
+    let shown = 0
+    el.tracks.querySelectorAll<HTMLElement>('li[data-i]').forEach((li) => {
+      const t = ts[+li.dataset.i!]
+      const ok = !t || terms.every((w) => norm(`${t.title} ${t.artist} ${t.album}`).includes(w))
+      li.hidden = !ok
+      if (ok) shown++
+    })
+    const none = el.tracks.querySelector<HTMLElement>('[data-nomatch]')
+    if (none) none.hidden = !terms.length || shown > 0
+    el.listCount.textContent = !ts.length ? '' : terms.length ? `${shown} / ${ts.length} 首` : `${ts.length} 首`
+  }
+  el.filter.addEventListener('input', () => { applyFilter(); el.tracks.scrollTop = 0 })
+  el.filter.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { // 回车：播放第一首匹配的歌
+      el.tracks.querySelector<HTMLElement>('li[data-i]:not([hidden])')?.click()
+    } else if (e.key === 'Escape' && el.filter.value) { // Esc：先清空搜索，再按一次才退出输入框
+      e.stopPropagation()
+      el.filter.value = ''
+      applyFilter()
+    }
+  })
   el.tracks.addEventListener('click', (e) => {
     const li = (e.target as HTMLElement).closest('li')
     if (!li?.dataset.i) return

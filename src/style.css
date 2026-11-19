@@ -217,6 +217,14 @@ body[data-mode="stage"] .lyric { opacity: 0; }
 .pn-folders li:hover button { opacity: 1; }
 .pn-folders button:hover { color: #fff; background: rgba(255, 255, 255, 0.08); }
 .pn-note { margin: 8px 8px 0; font-size: 11px; color: var(--dim); letter-spacing: 0.06em; }
+/* 列表内搜索 */
+.pn-filter { padding: 0 16px 8px; }
+.pn-filter input {
+  width: 100%; padding: 8px 14px; border-radius: 10px; border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04); color: var(--fg); font: inherit; font-size: 12px; outline: none;
+}
+.pn-filter input:focus { border-color: rgba(255, 255, 255, 0.3); }
+.pn-tracks li[hidden] { display: none; }
 .pn-tracks li > i { flex: none; width: 22px; font-style: normal; font-size: 11px; color: var(--dim); text-align: right; font-variant-numeric: tabular-nums; }
 .pn-tracks li > div { flex: 1; min-width: 0; }
 .pn-tracks b, .pn-tracks em { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
