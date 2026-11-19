@@ -13,6 +13,9 @@ export class Player {
   current: Track | null = null
   mode: Mode = (localStorage.getItem('player.mode') as Mode) || 'list'
   lyrics: LrcLine[] = []
+  /** 选择的网易云音质；got = 当前歌曲实际拿到的音质（本地歌曲为文件格式） */
+  quality: ncm.Level = (localStorage.getItem('player.quality') as ncm.Level) || 'exhigh'
+  got: { level: string; br: number; type: string } | null = null
   loading = false
   toast: (msg: string) => void = () => {}
   private subs = new Set<() => void>()
@@ -67,26 +70,31 @@ export class Player {
     this.emit()
   }
 
-  async play(tr: Track, auto = false) {
+  async play(tr: Track, auto = false, at = 0) {
     const my = ++this.token
     if (tr.key !== this.current?.key) this.retried = false
     this.started = false
     this.current = tr
     this.lyrics = []
+    this.got = null
     this.loading = true
     this.emit()
     try {
       let url: string
-      if (tr.source === 'local' && tr.path) {
-        url = mediaUrl(tr.path)
-      } else if (tr.source === 'local') {
-        if (this.blobUrl) URL.revokeObjectURL(this.blobUrl)
-        url = this.blobUrl = URL.createObjectURL(tr.file!)
+      if (tr.source === 'local') {
+        const name = tr.path || tr.file?.name || ''
+        this.got = { level: 'local', br: 0, type: (name.match(/\.(\w+)$/)?.[1] || '').toLowerCase() }
+        if (tr.path) url = mediaUrl(tr.path)
+        else {
+          if (this.blobUrl) URL.revokeObjectURL(this.blobUrl)
+          url = this.blobUrl = URL.createObjectURL(tr.file!)
+        }
       } else {
-        const r = await ncm.songUrl(tr.ncmId!)
+        const r = await ncm.songUrl(tr.ncmId!, this.quality)
         if (my !== this.token) return
         if (!r.url) throw new Error(tr.vip || ncm.loggedIn() ? '需要会员或暂无版权' : '需要登录或暂无版权')
         url = r.url
+        this.got = { level: r.level, br: r.br, type: r.type }
         if (r.trial) this.toast('仅返回了试听片段 · 登录会员账号可播放完整版')
         ncm.lyric(tr.ncmId!).then((l) => {
           if (my !== this.token) return
@@ -94,7 +102,7 @@ export class Player {
           this.emit()
         }).catch(() => {})
       }
-      await this.spectrum.play(url)
+      await this.spectrum.play(url, at)
       if (my !== this.token) return
       this.fails = 0
       this.started = true
@@ -166,6 +174,18 @@ export class Player {
     this.el.volume = Math.max(0, Math.min(1, v))
     localStorage.setItem('player.volume', String(this.el.volume))
   }
+  /** 切换音质；正在播放网易云歌曲时按新音质重新取地址，从原位置接着播 */
+  async setQuality(level: ncm.Level) {
+    this.quality = level
+    localStorage.setItem('player.quality', level)
+    this.emit()
+    const tr = this.current
+    if (!tr || tr.source !== 'ncm' || !this.spectrum.loaded) return
+    const at = this.time, was = this.playing
+    await this.play(tr, false, at)
+    if (!was) this.spectrum.pause()
+  }
+
   cycleMode() {
     this.mode = MODES[(MODES.indexOf(this.mode) + 1) % MODES.length]
     localStorage.setItem('player.mode', this.mode)

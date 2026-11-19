@@ -125,6 +125,33 @@ body.is-paused .eq i { animation-play-state: paused; }
 .np-vol { display: flex; align-items: center; gap: 2px; width: 104px; flex: none; }
 .np-vol.muted .v-wave { opacity: 0.2; }
 
+/* 音质：小药丸按钮 + 向上弹出的菜单 */
+.np-q { position: relative; flex: none; }
+.np-qbtn {
+  min-width: 44px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); font-size: 11px; letter-spacing: 0.08em;
+  color: rgba(235, 242, 255, 0.8); white-space: nowrap; transition: color 0.2s, border-color 0.2s;
+}
+.np-qbtn:hover, .np-qbtn.open { color: #fff; border-color: rgba(255, 255, 255, 0.35); }
+.np-qbtn.lower { color: var(--dim); border-style: dashed; }
+.np-qmenu {
+  position: absolute; right: -8px; bottom: calc(100% + 14px); width: 220px; padding: 8px; border-radius: 14px;
+  background: rgba(14, 16, 21, 0.92); border: 1px solid var(--line); backdrop-filter: blur(20px);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5); animation: qmIn 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.np-qmenu[hidden] { display: none; }
+.qm-head { padding: 4px 10px 6px; font-size: 10px; letter-spacing: 0.3em; color: var(--dim); }
+.np-qmenu button {
+  width: 100%; display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  padding: 7px 10px; border-radius: 8px; font-size: 13px; text-align: left; transition: background 0.2s;
+}
+.np-qmenu button:hover { background: rgba(255, 255, 255, 0.07); }
+.np-qmenu button b { font-weight: 500; }
+.np-qmenu button small { font-size: 11px; color: var(--dim); }
+.np-qmenu button.on b { font-weight: 700; color: #fff; }
+.np-qmenu button.on { background: rgba(255, 255, 255, 0.08); }
+.qm-note { margin: 6px 10px 2px; padding-top: 8px; border-top: 1px solid var(--line); font-size: 11px; line-height: 1.6; color: var(--dim); }
+@keyframes qmIn { from { opacity: 0; transform: translateY(6px); } }
+
 /* 歌词：播放器上方，原文一行 + 翻译一行（外语歌），换行时淡入 */
 .lyric {
   position: fixed; left: 50%; bottom: 118px; transform: translateX(-50%); max-width: min(760px, 90vw); text-align: center;

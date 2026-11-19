@@ -157,11 +157,25 @@ export async function fm(): Promise<TrackList> {
 }
 
 // ---------- 播放地址 / 歌词 ----------
+// 音质：请求的档位不可用时（未登录 / 非会员 / 歌曲本身没有），网易云自动降到可用的最高档，并在 level 里返回实际档位
+export const LEVELS = [
+  { id: 'standard', name: '标准', note: '128k' },
+  { id: 'higher', name: '较高', note: '192k' },
+  { id: 'exhigh', name: '极高', note: '320k' },
+  { id: 'lossless', name: '无损', note: 'FLAC' },
+  { id: 'hires', name: 'Hi-Res', note: '24bit FLAC' },
+  { id: 'jymaster', name: '超清母带', note: 'SVIP' },
+] as const
+export type Level = (typeof LEVELS)[number]['id']
+export const levelName = (id: string) => LEVELS.find((l) => l.id === id)?.name ?? id
+export const levelRank = (id: string) => LEVELS.findIndex((l) => l.id === id)
+export interface SongUrl { url: string; trial: boolean; level: string; br: number; type: string }
+
 /** 地址有时效，播放时现取。trial = 只返回了试听片段 */
-export async function songUrl(id: number): Promise<{ url: string; trial: boolean }> {
-  const r = await call('song_url_v1', { id, level: loggedIn() ? 'exhigh' : 'standard' })
+export async function songUrl(id: number, level: Level): Promise<SongUrl> {
+  const r = await call('song_url_v1', { id, level })
   const d = r.data?.[0]
-  return { url: https(d?.url), trial: !!d?.freeTrialInfo }
+  return { url: https(d?.url), trial: !!d?.freeTrialInfo, level: d?.level || '', br: d?.br || 0, type: (d?.type || '').toLowerCase() }
 }
 /** 原文歌词 + 中文翻译（外语歌才有翻译） */
 export async function lyric(id: number): Promise<{ lrc: string; tlrc: string }> {

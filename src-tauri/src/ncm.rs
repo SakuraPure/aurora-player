@@ -250,6 +250,9 @@ mod tests {
         let id = s["result"]["songs"][0]["id"].as_i64().unwrap();
         let u = ncm.call("song_url_v1", &json!({ "id": id, "level": "standard" }), "").await.unwrap();
         assert!(u["data"][0]["url"].as_str().is_some_and(|x| x.starts_with("http")), "url: {u}");
+        // 音质：匿名请求无损会降到可用的最高档，并返回实际档位
+        let q = ncm.call("song_url_v1", &json!({ "id": id, "level": "lossless" }), "").await.unwrap();
+        assert!(q["data"][0]["level"].as_str().is_some_and(|l| !l.is_empty()), "level: {q}");
         let l = ncm.call("lyric", &json!({ "id": id }), "").await.unwrap();
         assert!(l["lrc"]["lyric"].is_string());
         let t = ncm.call("playlist_track_all", &json!({ "id": 3778678, "limit": 3 }), "").await.unwrap();

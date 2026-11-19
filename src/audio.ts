@@ -31,9 +31,13 @@ export class Spectrum {
     this.analyser.connect(this.ctx.destination)
   }
 
-  async play(url?: string) {
+  /** at：换源后从该秒继续（切换音质时用） */
+  async play(url?: string, at = 0) {
     this.graph()
-    if (url !== undefined) this.el.src = url
+    if (url !== undefined) {
+      this.el.src = url
+      if (at > 0) this.el.currentTime = at // 元数据加载前设置 = 起播位置
+    }
     await this.ctx!.resume()
     await this.el.play()
   }

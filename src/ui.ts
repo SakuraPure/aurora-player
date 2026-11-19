@@ -26,7 +26,7 @@ export function initUI(player: Player, hooks: UIHooks) {
     lyric: $('lyric'), toast: $('toast'), drop: $('drop'),
     img: $<HTMLImageElement>('np-img'), title: $('np-title'), artist: $('np-artist'), btn: $('np-btn'),
     cur: $('np-cur'), dur: $('np-dur'), seek: $('np-track'), fill: $('np-fill'), mode: $('np-mode'),
-    vol: $('np-vtrack'), vfill: $('np-vfill'), mute: $('np-mute'),
+    vol: $('np-vtrack'), vfill: $('np-vfill'), mute: $('np-mute'), qbtn: $('np-q'), qmenu: $('np-qmenu'),
   }
 
   // ---------------- 提示 ----------------
@@ -475,6 +475,49 @@ export function initUI(player: Player, hooks: UIHooks) {
     el.fill.style.width = `${dur ? (t / dur) * 100 : 0}%`
   }
 
+  // ---------------- 音质：按钮显示实际拿到的音质，菜单里选择想要的档位 ----------------
+  const gotLabel = () => {
+    const g = player.got
+    if (!g) return ncm.levelName(player.quality)
+    if (g.level === 'local') return g.type.toUpperCase() || '本地'
+    return ncm.levelName(g.level)
+  }
+  const gotDetail = () => {
+    const g = player.got
+    if (!g) return ''
+    if (g.level === 'local') return `本地文件 · ${g.type.toUpperCase()}`
+    return `${ncm.levelName(g.level)} · ${g.type.toUpperCase()} ${Math.round(g.br / 1000)}k`
+  }
+  // 实际音质低于所选（账号或歌曲不支持）时按钮变暗
+  const downgraded = () => !!player.got && player.got.level !== 'local' && ncm.levelRank(player.got.level) >= 0 &&
+    ncm.levelRank(player.got.level) < ncm.levelRank(player.quality)
+  function renderQuality() {
+    el.qbtn.textContent = gotLabel()
+    el.qbtn.classList.toggle('lower', downgraded())
+    el.qbtn.title = player.got ? `当前：${gotDetail()} · 已选：${ncm.levelName(player.quality)}` : `已选：${ncm.levelName(player.quality)}`
+    if (el.qmenu.hidden) return
+    el.qmenu.innerHTML = `<div class="qm-head">音质</div>` +
+      ncm.LEVELS.map((l) => `<button data-lv="${l.id}" class="${l.id === player.quality ? 'on' : ''}"><b>${l.name}</b><small>${l.note}</small></button>`).join('') +
+      `<p class="qm-note">${player.got ? `当前：${esc(gotDetail())}<br>` : ''}无损及以上需要黑胶 VIP；不可用时自动用可用的最高音质</p>`
+  }
+  const closeQ = () => { el.qmenu.hidden = true; el.qbtn.classList.remove('open') }
+  el.qbtn.addEventListener('click', () => {
+    el.qmenu.hidden = !el.qmenu.hidden
+    el.qbtn.classList.toggle('open', !el.qmenu.hidden)
+    renderQuality()
+  })
+  el.qmenu.addEventListener('click', async (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLElement>('button[data-lv]')
+    if (!b) return
+    const lv = b.dataset.lv as ncm.Level
+    closeQ()
+    if (lv === player.quality) return
+    await player.setQuality(lv)
+    toast(downgraded() ? `已选「${ncm.levelName(lv)}」· 这首歌当前最高为「${ncm.levelName(player.got!.level)}」` : `音质：${ncm.levelName(lv)}`)
+  })
+  addEventListener('pointerdown', (e) => { if (!el.qmenu.hidden && !(e.target as HTMLElement).closest('.np-q')) closeQ() })
+  addEventListener('keydown', (e) => { if (e.key === 'Escape' && !el.qmenu.hidden) { closeQ(); e.stopImmediatePropagation() } }, true)
+
   let shownKey = '-'
   function renderNP() {
     const tr = player.current
@@ -495,6 +538,7 @@ export function initUI(player: Player, hooks: UIHooks) {
     el.libName.textContent = player.list.name || '曲库'
     el.libCount.textContent = player.list.tracks.length ? `${player.list.tracks.length} 首` : ''
     if (open && !el.listView.hidden) renderTracks()
+    renderQuality()
     paintProgress()
   }
   player.on(renderNP)
