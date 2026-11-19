@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AURORA · 极光韵境音乐播放器</title>
+  </head>
+  <body data-mode="wave">
+    <canvas id="gl"></canvas>
+
+    <header class="brand">
+      <span class="logo"><i></i><i></i><i></i><i></i></span>
+      <div>
+        <b>AURORA</b>
+        <small>极光韵境 · Music Frontier</small>
+      </div>
+    </header>
+    <button class="lib-btn" id="lib-btn" aria-label="打开曲库">
+      <svg viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="1.6" rx="0.8" /><rect x="4" y="11.2" width="11" height="1.6" rx="0.8" /><rect x="4" y="16.4" width="7" height="1.6" rx="0.8" /></svg>
+      <span id="lib-name">曲库</span><small id="lib-count"></small>
+    </button>
+    <button class="back" id="back">← 返回波形 <kbd>Esc</kbd></button>
+    <div class="hint" id="hint"></div>
+
+    <div class="label" id="label">
+      <div class="lb-no" id="lb-no"></div>
+      <div class="lb-title" id="lb-title"></div>
+      <div class="lb-album" id="lb-album"></div>
+      <div class="lb-row"><span id="lb-artist"></span><span id="lb-dur"></span></div>
+      <div class="lb-cta"><span class="eq"><i></i><i></i><i></i></span><span id="lb-cta"></span></div>
+    </div>
+
+    <!-- 曲库面板 -->
+    <aside class="panel" id="panel" aria-hidden="true">
+      <section class="pn-view" id="pn-sources">
+        <div class="pn-head"><b>曲库</b><button class="pn-x" data-close aria-label="关闭">×</button></div>
+        <div class="pn-scroll">
+          <div class="pn-sec">网易云音乐</div>
+          <div class="pn-account" id="pn-account"></div>
+          <div class="pn-qr" id="pn-qr" hidden>
+            <img id="pn-qr-img" alt="登录二维码" />
+            <p id="pn-qr-msg">打开网易云音乐 App 扫码登录</p>
+          </div>
+          <form class="pn-search" id="pn-search"><input id="pn-q" placeholder="搜索歌曲 / 歌手 / 专辑" autocomplete="off" /></form>
+          <ul class="pn-lists" id="pn-lists"></ul>
+
+          <div class="pn-sec">本地音乐</div>
+          <div class="pn-actions">
+            <button id="pn-folder">导入文件夹</button>
+            <button id="pn-files">添加文件</button>
+          </div>
+          <ul class="pn-lists" id="pn-local"></ul>
+          <p class="pn-note">也可以把音频文件或文件夹直接拖进窗口</p>
+        </div>
+      </section>
+      <section class="pn-view" id="pn-list" hidden>
+        <div class="pn-head">
+          <button class="pn-back" id="pn-back" aria-label="返回">←</button>
+          <b id="pn-list-name"></b><small id="pn-list-count"></small>
+          <button class="pn-x" data-close aria-label="关闭">×</button>
+        </div>
+        <ol class="pn-tracks pn-scroll" id="pn-tracks"></ol>
+      </section>
+    </aside>
+    <input type="file" id="in-folder" webkitdirectory multiple hidden />
+    <input type="file" id="in-files" accept="audio/*,.flac,.m4a,.ogg,.opus" multiple hidden />
+
+    <div class="lyric" id="lyric"></div>
+    <div class="toast" id="toast"></div>
+
+    <footer class="player">
+      <img id="np-img" alt="" />
+      <div class="np-info">
+        <div class="np-title" id="np-title"></div>
+        <div class="np-artist" id="np-artist"></div>
+      </div>
+      <div class="np-ctrl">
+        <button class="np-ico" id="np-prev" aria-label="上一首"><svg viewBox="0 0 24 24"><rect x="5" y="6" width="2" height="12" rx="1" /><path d="M18 6.9v10.2a.9.9 0 0 1-1.4.75L9.5 12.75a.9.9 0 0 1 0-1.5l7.1-5.1A.9.9 0 0 1 18 6.9z" /></svg></button>
+        <button class="np-btn paused" id="np-btn" aria-label="播放 / 暂停">
+          <svg class="i-pause" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1.5" /><rect x="14" y="5" width="4" height="14" rx="1.5" /></svg>
+          <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.6-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z" /></svg>
+        </button>
+        <button class="np-ico" id="np-next" aria-label="下一首"><svg viewBox="0 0 24 24"><rect x="17" y="6" width="2" height="12" rx="1" /><path d="M6 6.9v10.2a.9.9 0 0 0 1.4.75l7.1-5.1a.9.9 0 0 0 0-1.5L7.4 6.15A.9.9 0 0 0 6 6.9z" /></svg></button>
+      </div>
+      <div class="np-prog">
+        <span id="np-cur">0:00</span>
+        <div class="np-track" id="np-track"><i id="np-fill"></i></div>
+        <span id="np-dur">0:00</span>
+      </div>
+      <button class="np-ico np-mode" id="np-mode" aria-label="播放模式"></button>
+      <div class="np-vol">
+        <button class="np-ico" id="np-mute" aria-label="静音"><svg viewBox="0 0 24 24"><path d="M4 9.5h3.2L12 5.6v12.8l-4.8-3.9H4z" /><path class="v-wave" d="M15.5 9a4 4 0 0 1 0 6M17.8 6.6a7.4 7.4 0 0 1 0 10.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg></button>
+        <div class="np-vtrack" id="np-vtrack"><i id="np-vfill"></i></div>
+      </div>
+    </footer>
+
+    <div class="drop" id="drop"><div>松开以导入本地音乐</div></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
