@@ -9,6 +9,11 @@ import * as SH from './shaders'
 const N = 48 // 屏幕上的音柱数（循环复用）；音柱 id 不取模，滚动时依次对应曲库里的歌
 const Z0 = 20 // 相机距离
 const GAP = 0.56 // 音柱间隙占比
+// 封面背景（开关）参数
+const BG_SIZE = 1.08 // 中景封面边长 / 可视高度：放大到略超出屏幕高，上下边缘羽化消失
+const BG_Y = 0.03 // 略微上移，下缘藏到播放器后
+const BG_OP = 0.36 // 中景不透明度
+const BG_FEATHER = 0.55, BG_LOD = 0.6 // 中景边缘羽化比例、轻微柔化（保持清晰可辨）
 const $ = (id: string) => document.getElementById(id)!
 const { lerp, clamp } = THREE.MathUtils
 const mod = (a: number, n: number) => ((a % n) + n) % n
@@ -29,10 +34,14 @@ const L = { visW: 0, visH: 0, rowW: 0, x0: 0, slot: 0, amp: 0, cover: 0, barW: 0
 // ---------------- 主画面：背景 + 波形/音柱 + 拖尾 + 阴影 ----------------
 const data = new Float32Array(N * 2 * 4)
 const dataTex = new THREE.DataTexture(data, N, 2, THREE.RGBAFormat, THREE.FloatType)
+const blankTex = new THREE.Texture()
 const U = {
   uD: { value: dataTex }, uN: { value: N }, uSlot: { value: 1 }, uX0: { value: 0 }, uRowW: { value: 1 }, uOffset: { value: 0 },
   uMorph: { value: 0 }, uStage: { value: 0 }, uAmp: { value: 1 }, uGap: { value: GAP }, uTrail: { value: 1.5 }, uTime: { value: 0 },
   uShadow: { value: new THREE.Vector2() }, uNear: { value: 0 }, uCursor: { value: 0 },
+  uBgCur: { value: blankTex }, uBgPrev: { value: blankTex }, uBgRect: { value: new THREE.Vector4() }, uBgFull: { value: new THREE.Vector4() },
+  uView: { value: new THREE.Vector2() }, uBgRest: { value: new THREE.Vector2(BG_FEATHER, BG_LOD) }, uBgOn: { value: 0 }, uBgCurA: { value: 0 },
+  uBgPrevA: { value: 0 }, uBgAmb: { value: 0 }, uBgFeather: { value: BG_FEATHER }, uBgLod: { value: BG_LOD }, uBgK: { value: 0 }, uBgOp: { value: BG_OP },
 }
 const stageMesh = new THREE.Mesh(
   new THREE.PlaneGeometry(1, 1),
@@ -45,7 +54,6 @@ scene.add(stageMesh)
 const loader = new THREE.TextureLoader().setCrossOrigin('anonymous')
 interface CoverTex { tex: THREE.Texture; ready: number }
 const texCache = new Map<string, CoverTex>()
-const blankTex = new THREE.Texture()
 function coverTex(tr: Track): CoverTex {
   const hitE = texCache.get(tr.key)
   if (hitE) { texCache.delete(tr.key); texCache.set(tr.key, hitE); return hitE }
@@ -57,7 +65,7 @@ function coverTex(tr: Track): CoverTex {
   texCache.set(tr.key, e)
   for (const [k, old] of texCache) {
     if (texCache.size <= 40) break
-    if (cards.some((c) => c.active && c.u.uTex.value === old.tex)) continue
+    if (cards.some((c) => c.active && c.u.uTex.value === old.tex) || k === bgCur?.key || k === bgPrev?.key) continue
     old.tex.dispose()
     texCache.delete(k)
   }
@@ -65,8 +73,10 @@ function coverTex(tr: Track): CoverTex {
 }
 
 // ---------------- 封面卡片 ----------------
+type Rect = { x: number; y: number; w: number; h: number } // 中心 + 半宽高（世界坐标，z=0 平面）
 interface Card {
   id: number; p: number; v: number; target: number; side: number; active: boolean; entry: CoverTex | null; fade: number
+  rect: Rect // 卡片正面投影到 z=0 平面的矩形（封面背景吸收/释放用）
   mesh: THREE.Mesh; shadow: THREE.Mesh
   u: { uTex: { value: THREE.Texture }; uCover: { value: number }; uDim: { value: number } }
   su: { uExt: { value: THREE.Vector2 }; uHalf: { value: THREE.Vector2 }; uBlur: { value: number }; uAlpha: { value: number } }
@@ -84,7 +94,7 @@ const cards: Card[] = Array.from({ length: 8 }, () => {
   mesh.renderOrder = 1
   mesh.visible = shadow.visible = false
   scene.add(shadow, mesh)
-  return { id: 0, p: 0, v: 0, target: 0, side: 1, active: false, entry: null, fade: 0, mesh, shadow, u, su }
+  return { id: 0, p: 0, v: 0, target: 0, side: 1, active: false, entry: null, fade: 0, rect: { x: 0, y: 0, w: 0, h: 0 }, mesh, shadow, u, su }
 })
 
 // ---------------- 状态 ----------------
@@ -167,6 +177,7 @@ function popCard(id: number) {
     c.fade = c.entry.ready
     c.u.uTex.value = c.entry.tex
     c.mesh.visible = c.shadow.visible = true
+    c.rect = barRect(id)
   }
   c.target = 1
 }
@@ -213,6 +224,8 @@ function updateCard(c: Card, dt: number) {
   // 投影：起点与音柱阴影一致，抬得越高越大越虚
   const hw = (c.mesh.scale.x * Math.abs(Math.cos(yaw)) + c.mesh.scale.z * Math.abs(Math.sin(yaw))) / 2
   const hh = c.mesh.scale.y / 2
+  const f = Z0 / (Z0 - c.mesh.position.z)
+  c.rect = { x: c.mesh.position.x * f, y: c.mesh.position.y * f, w: hw * f, h: hh * f }
   const blur = lerp(0.02 + 0.1 * stage, C * 0.12, pc)
   const off = U.uShadow.value
   c.shadow.position.set(
@@ -257,6 +270,131 @@ function locate(ti: number) {
   offsetT = L.rowW / 2 - (id + 0.5) * L.slot
   pinned = stageT > 0.5 ? id : null
 }
+// ---------------- 封面背景（开关；关闭时画面与原效果完全一致） ----------------
+// 当前歌曲的封面作为波形背景；点击音柱进入立体态时背景被吸收进弹出的封面，点击播放或返回时再从封面处释放回背景
+const BG_KEY = 'fx.coverBg'
+let bgEnabled = localStorage.getItem(BG_KEY) === '1'
+let bgCur: Track | null = null, bgPrev: Track | null = null
+let bgCurFade = 0, bgPrevA = 0 // 换歌交叉淡化
+let bgK = 0 // 0 = 背景，1 = 吸收进音柱
+let bgDir = 0 // 1 吸收中，-1 释放中
+let bgAnchor: number | null = null
+const bgSmall: Rect = { x: 0, y: 0, w: 0.1, h: 0.1 } // 吸收的目标 / 释放的起点
+const par = new THREE.Vector2() // 视差：背景随鼠标反向轻移，与静止的波形拉开层次
+const bgHi = new Map<string, CoverTex>()
+
+/** 背景用高清封面（网易云取 1024），未就绪前先用卡片的 512 */
+function bgTex(tr: Track): CoverTex {
+  const lo = coverTex(tr)
+  if (!tr.cover?.includes('param=512y512')) return lo
+  let hi = bgHi.get(tr.key)
+  if (!hi) {
+    const e: CoverTex = { tex: blankTex, ready: 0 }
+    e.tex = loader.load(tr.cover.replace('param=512y512', 'param=1024y1024'), () => { e.ready = 1 }, undefined, () => {})
+    bgHi.set(tr.key, (hi = e))
+    for (const [k, old] of bgHi) {
+      if (bgHi.size <= 3) break
+      if (k === bgCur?.key || k === bgPrev?.key || k === tr.key) continue
+      old.tex.dispose()
+      bgHi.delete(k)
+    }
+  }
+  return hi.ready ? hi : lo
+}
+function barRect(id: number): Rect {
+  const v = barV[slotOf(id)]
+  return { x: barX(id), y: v / 2, w: L.barW / 2, h: Math.max(Math.abs(v) / 2, L.barW) }
+}
+function anchorRect(id: number): Rect {
+  return cards.find((c) => c.active && c.id === id)?.rect ?? barRect(id)
+}
+function fullRect(): Rect {
+  const S = L.visH * BG_SIZE
+  return { x: -par.x * L.visW * 0.014, y: L.visH * BG_Y - par.y * L.visH * 0.014, w: S / 2, h: S / 2 }
+}
+function absorb(id: number) {
+  bgAnchor = id
+  bgDir = 1
+  Object.assign(bgSmall, anchorRect(id))
+}
+/** 从矩形 r（卡片 / 音柱）释放回背景；若换了歌且旧背景还在，旧背景原位淡出、新封面从卡片里展开 */
+function releaseFrom(r: Rect) {
+  const tr = player.current
+  if (tr && tr.key !== bgCur?.key) {
+    if (bgK < 0.5 && bgCur) { bgPrev = bgCur; bgPrevA = bgCurFade }
+    bgCur = tr
+    bgK = 1
+  }
+  if (bgK <= 0) return
+  bgCurFade = 1
+  Object.assign(bgSmall, r)
+  bgDir = -1
+}
+function releaseSource(): Rect {
+  const c = cards.find((c) => c.active && c.id === hovered) ?? cards.filter((c) => c.active).sort((a, b) => b.p - a.p)[0]
+  return c ? c.rect : bgAnchor !== null ? barRect(bgAnchor) : { x: 0, y: 0, w: L.barW, h: L.barW }
+}
+const lgLerp = (a: number, b: number, f: number) => Math.exp(lerp(Math.log(Math.max(a, 1e-3)), Math.log(Math.max(b, 1e-3)), f))
+
+function updateBg(dt: number) {
+  par.x = damp(par.x, mouseInside ? ndc.x : 0, 2.2, dt)
+  par.y = damp(par.y, mouseInside ? ndc.y : 0, 2.2, dt)
+  // 换歌：背景可见时交叉淡化；已被吸收时直接替换
+  const tr = player.current
+  if ((tr?.key ?? '') !== (bgCur?.key ?? '')) {
+    if (bgK > 0.5 && bgDir !== -1) { bgCur = tr; bgCurFade = 1 }
+    else { if (bgCur) { bgPrev = bgCur; bgPrevA = bgCurFade } bgCur = tr; bgCurFade = 0 }
+  }
+  const cur = bgCur ? bgTex(bgCur) : null
+  if (cur?.ready) bgCurFade = Math.min(1, bgCurFade + dt / 1.1)
+  bgPrevA = Math.max(0, bgPrevA - dt / 1.1)
+  if (bgPrevA <= 0) bgPrev = null
+
+  // 吸收 / 释放进度；吸收目标跟随卡片（平滑，避免卡片收回时跳变）
+  if (bgDir === 1) {
+    bgK = Math.min(1, bgK + dt / 0.85)
+    if (bgK >= 1) bgDir = 0
+    if (bgAnchor !== null) {
+      const a = anchorRect(bgAnchor)
+      bgSmall.x = damp(bgSmall.x, a.x, 16, dt); bgSmall.y = damp(bgSmall.y, a.y, 16, dt)
+      bgSmall.w = damp(bgSmall.w, a.w, 16, dt); bgSmall.h = damp(bgSmall.h, a.h, 16, dt)
+    }
+  } else if (bgDir === -1) {
+    bgK = Math.max(0, bgK - dt / 1.05)
+    if (bgK <= 0) bgDir = 0
+  }
+
+  // 几何：宽度先收（像被抽进细长的音柱），高度随后；尺寸按对数插值，缩放速度均匀
+  const F = fullRect(), S = bgSmall, k = bgK
+  const kp = ease(k), kx = ease(clamp(k / 0.7, 0, 1)), ky = ease(clamp((k - 0.15) / 0.85, 0, 1))
+  U.uBgRect.value.set(lerp(F.x, S.x, kp), lerp(F.y, S.y, kp), lgLerp(F.w, S.w, kx), lgLerp(F.h, S.h, ky))
+  U.uBgFull.value.set(F.x, F.y, F.w, F.h)
+  const shown = sm(0, 1, bgCurFade)
+  // 飞行中更实、更清晰、边缘更利落，抵达音柱前一刻淡出融入
+  U.uBgCurA.value = lerp(BG_OP, 0.95, sm(0.05, 0.55, k)) * (1 - sm(0.78, 1, k)) * shown
+  U.uBgAmb.value = (1 - sm(0, 0.65, k)) * shown
+  U.uBgFeather.value = lerp(BG_FEATHER, 0.03, sm(0, 0.55, k))
+  U.uBgLod.value = lerp(BG_LOD, 0, sm(0, 0.5, k))
+  U.uBgK.value = k
+  U.uBgPrevA.value = sm(0, 1, bgPrevA)
+  U.uBgCur.value = cur?.tex ?? blankTex
+  U.uBgPrev.value = bgPrev ? bgTex(bgPrev).tex : blankTex
+  U.uBgOn.value = damp(U.uBgOn.value, bgEnabled && (bgCur || bgPrev) ? 1 : 0, 3, dt)
+}
+
+const fxBtn = $('fx-bg')
+function renderFx() {
+  fxBtn.classList.toggle('on', bgEnabled)
+  fxBtn.setAttribute('aria-pressed', String(bgEnabled))
+}
+fxBtn.addEventListener('click', () => {
+  bgEnabled = !bgEnabled
+  localStorage.setItem(BG_KEY, bgEnabled ? '1' : '0')
+  renderFx()
+  app.toast(bgEnabled ? (player.current ? '封面背景：开' : '封面背景：开 · 播放歌曲后显示') : '封面背景：关', 1600)
+})
+renderFx()
+
 let hintKey = ''
 function setHint(key: string) {
   if (key === hintKey) return
@@ -290,20 +428,26 @@ function onClick() {
   if (stageT > 0.5) {
     const c = cardAt()
     const id = c ? c.id : pk.inRegion ? hovered : null
-    if (id !== null) playId(id)
-    else backToWave()
+    if (id !== null) {
+      playId(id)
+      releaseFrom(anchorRect(id)) // 点击播放：封面从这张卡片里释放成为背景
+    } else backToWave()
   } else if (barsT > 0.5) {
     if (pk.inRegion && morph > 0.5) {
       stageT = 1
       hovered = idFromU(pk.u)
       popCard(hovered)
+      absorb(hovered) // 背景被吸收进弹出的这根音柱
     } else if (!pk.inRegion) backToWave()
   } else if (pk.onLine) {
     if (player.list.tracks.length) barsT = 1
     else app.openPanel('sources')
   }
 }
-function backToWave() { stageT = 0; barsT = 0; hovered = pinned = null }
+function backToWave() {
+  if (bgK > 0 && bgDir !== -1) releaseFrom(releaseSource()) // 返回：从当前封面处释放回背景
+  stageT = 0; barsT = 0; hovered = pinned = null
+}
 addEventListener('wheel', (e) => {
   if (stageT < 0.5) return
   e.preventDefault()
@@ -318,6 +462,7 @@ addEventListener('keydown', (e) => {
     ;(document.activeElement as HTMLElement | null)?.blur() // 避免空格同时触发聚焦中的按钮
     player.toggle()
   }
+  if (e.key === 'b' || e.key === 'B') fxBtn.click()
   if (stageT > 0.5 && e.key === 'ArrowLeft') offsetT += L.slot
   if (stageT > 0.5 && e.key === 'ArrowRight') offsetT -= L.slot
 })
@@ -326,6 +471,7 @@ ui.back.addEventListener('click', backToWave)
 // ---------------- 尺寸 ----------------
 function resize() {
   const w = innerWidth, h = innerHeight
+  if (!w || !h) return // 窗口最小化 / 面板隐藏时可能是 0×0：跳过，否则比例为 NaN 会污染所有平滑状态
   renderer.setSize(w, h)
   camera.aspect = w / h
   camera.updateProjectionMatrix()
@@ -341,6 +487,7 @@ function resize() {
   U.uX0.value = L.x0
   U.uRowW.value = L.rowW
   U.uAmp.value = L.amp
+  U.uView.value.set(L.visW / 2, L.visH / 2)
   U.uShadow.value.set(L.visH * 0.008, -L.visH * 0.014)
   stageMesh.scale.set(L.visW * 1.05, L.visH * 1.05, 1)
 }
@@ -386,6 +533,11 @@ function tick(now: number) {
   }
   offset = damp(offset, offsetT, 9, dt)
 
+  // 平滑状态一旦出现 NaN 会永久残留：自愈
+  if (!Number.isFinite(base + mean[0] + barV[0] + waveV[0] + barH[0] + waveH[0])) {
+    base = 0.4
+    for (const a of [mean, barV, waveV, barH, barHv, waveH, waveHv]) a.fill(0)
+  }
   // 频谱 → 以"加权均值"为基线（而非 0），得到有正有负的信号
   let es = 0, ws = 0
   for (let i = 0; i < N; i++) {
@@ -430,6 +582,7 @@ function tick(now: number) {
   if (hovered !== null && stageT > 0.5) popCard(hovered)
   hidden.clear()
   for (const c of cards) if (c.active) { updateCard(c, dt); if (c.active) hidden.add(slotOf(c.id)) }
+  updateBg(dt)
 
   // 聚焦：有音柱被指向时，其余音柱稍微变暗
   const fid = stageT > 0.5 ? hovered : hovered2D
@@ -490,8 +643,9 @@ function tick(now: number) {
   renderer.render(scene, camera)
 }
 
+let frozen = false // 开发调试：冻结实时帧，便于逐帧检查动画
 function frame(now: number) {
-  tick(now)
+  if (!frozen) tick(now)
   requestAnimationFrame(frame)
 }
 requestAnimationFrame(frame)
@@ -504,5 +658,5 @@ if (import.meta.env.DEV) {
     simNow = Math.max(simNow, last)
     for (let i = 0; i < sec * 60; i++) tick((simNow += 1000 / 60))
   }
-  Object.assign(window, { __dbg: { run, onClick, cards, player, locate, get state() { return { barsT, stageT, morph, hovered, offset } }, waveYAt } })
+  Object.assign(window, { __dbg: { run, freeze: (f: boolean) => { frozen = f }, onClick, cards, player, locate, get state() { return { barsT, stageT, morph, hovered, offset, bgK, bgDir, bgEnabled, bgCur: bgCur?.title, bgFade: bgCurFade } }, waveYAt } })
 }

@@ -24,8 +24,29 @@ export const stageFrag = /* glsl */ `
 uniform sampler2D uD;
 uniform float uN, uSlot, uX0, uRowW, uOffset, uMorph, uStage, uAmp, uGap, uTrail, uTime, uNear, uCursor;
 uniform vec2 uShadow;
+// 封面背景（开关）：cur = 当前封面（可做吸收/释放动画的矩形），prev = 换歌时淡出的上一张（固定在背景位）
+uniform sampler2D uBgCur, uBgPrev;
+uniform vec4 uBgRect, uBgFull; // 中心 xy + 半宽高（世界坐标）
+uniform vec2 uView;            // 可视区半宽高
+uniform vec2 uBgRest;          // 背景位的羽化与模糊（prev 层固定用它）
+uniform float uBgOn, uBgCurA, uBgPrevA, uBgAmb, uBgFeather, uBgLod, uBgK, uBgOp;
 varying vec2 vW;
 ${common}
+// 高 mip 层 + 环形多点采样：便宜又平滑的大半径模糊
+vec3 soft(sampler2D t, vec2 uv, float lod, float r){
+  vec3 c = textureLod(t, uv, lod).rgb;
+  for (int i = 0; i < 8; i++){ float a = float(i) * 0.7854 + 0.39; c += textureLod(t, uv + vec2(cos(a), sin(a)) * r, lod).rgb; }
+  return c / 9.0;
+}
+// 封面以 cover 方式铺进矩形 R（窄矩形时裁切而不变形），边缘按 feather 羽化
+vec4 coverLayer(sampler2D t, vec2 p, vec4 R, float feather, float lod){
+  vec2 q = p - R.xy;
+  vec2 uv = q / (2.0 * max(R.z, R.w)) + 0.5;
+  vec2 e = R.zw - abs(q);
+  float f = max(feather * min(R.z, R.w), 1e-4);
+  float m = smoothstep(0.0, f, e.x) * smoothstep(0.0, f, e.y);
+  return vec4(textureLod(t, clamp(uv, 0.0, 1.0), lod).rgb, m);
+}
 vec4 D(float k){ return texelFetch(uD, ivec2(int(mod(k, uN)), 0), 0); }
 vec4 E(float k){ return texelFetch(uD, ivec2(int(mod(k, uN)), 1), 0); }
 float cubic(float a, float b, float c, float d, float t){
@@ -51,6 +72,25 @@ void main(){
   // 背景：近黑 + 一束很淡的舞台柔光（立体态略微提亮，让阴影可见）
   vec2 sp = vec2(x / (uRowW * 0.6), y / (uAmp * 2.4));
   vec3 col = vec3(0.036, 0.039, 0.048) + vec3(0.040, 0.043, 0.052) * exp(-dot(sp, sp)) * (0.35 + 0.65 * uStage);
+
+  // 封面背景：远景 = 放大 + 重度模糊的色场；中景 = 清晰但半透明、边缘羽化的封面；近景 = 波形（在其前方压暗一条带保证层次）
+  if (uBgOn > 0.001){
+    vec2 p = vec2(x, y);
+    vec2 uvA = (p - uBgFull.xy * 0.5) / (2.0 * max(uView.x, uView.y) * 1.3) + 0.5;
+    vec3 amb = soft(uBgCur, uvA, 5.5, 0.05) * uBgAmb;
+    if (uBgPrevA > 0.001) amb += soft(uBgPrev, uvA, 5.5, 0.05) * uBgPrevA;
+    amb = mix(vec3(dot(amb, vec3(0.299, 0.587, 0.114))), amb, 0.8);
+    col += amb * 0.3 * uBgOn;
+    if (uBgPrevA > 0.001){
+      vec4 pv = coverLayer(uBgPrev, p, uBgFull, uBgRest.x, uBgRest.y);
+      col = mix(col, pv.rgb * 0.9, pv.a * uBgPrevA * uBgOp * uBgOn);
+    }
+    vec4 cv = coverLayer(uBgCur, p, uBgRect, uBgFeather, uBgLod);
+    cv.rgb = mix(vec3(dot(cv.rgb, vec3(0.299, 0.587, 0.114))), cv.rgb, mix(0.88, 1.0, uBgK)); // 背景位略降饱和，让极光色更突出
+    col = mix(col, cv.rgb * 0.9, cv.a * uBgCurA * uBgOn);
+    float band = exp(-pow(y / (uAmp * 1.15), 2.0));
+    col *= 1.0 - (0.26 * band + 0.3 * smoothstep(0.55, 1.25, length(p / uView))) * uBgOn * (1.0 - uBgK);
+  }
 
   // 立体态：音柱投下柔和阴影
   if (uStage > 0.001){

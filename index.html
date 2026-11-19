@@ -15,10 +15,15 @@
         <small>极光韵境 · Music Frontier</small>
       </div>
     </header>
-    <button class="lib-btn" id="lib-btn" aria-label="打开曲库">
-      <svg viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="1.6" rx="0.8" /><rect x="4" y="11.2" width="11" height="1.6" rx="0.8" /><rect x="4" y="16.4" width="7" height="1.6" rx="0.8" /></svg>
-      <span id="lib-name">曲库</span><small id="lib-count"></small>
-    </button>
+    <div class="top-r">
+      <button class="fx-btn" id="fx-bg" aria-label="封面背景" title="封面背景（B）" aria-pressed="false">
+        <svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="2.6" /><circle cx="9" cy="10" r="1.6" /><path d="M4.2 17.2l4.9-4.4 3.4 3 3.1-2.6 4.2 4" /></svg>
+      </button>
+      <button class="lib-btn" id="lib-btn" aria-label="打开曲库">
+        <svg viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="1.6" rx="0.8" /><rect x="4" y="11.2" width="11" height="1.6" rx="0.8" /><rect x="4" y="16.4" width="7" height="1.6" rx="0.8" /></svg>
+        <span id="lib-name">曲库</span><small id="lib-count"></small>
+      </button>
+    </div>
     <button class="back" id="back">← 返回波形 <kbd>Esc</kbd></button>
     <div class="hint" id="hint"></div>
 
