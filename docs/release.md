@@ -2,7 +2,8 @@
 
 桌面版（Tauri）用 `tauri-plugin-updater` 自动更新：客户端启动 4 秒后静默检查一次，托盘菜单"检查更新"可手动检查；发现新版本时标题栏出现"新版本 vX · 点击更新"，点击后下载、校验签名、安装（NSIS 被动模式），完成后自动重启。
 
-> 当前 `tauri.conf.json` 里 `plugins.updater.endpoints` 为空 —— 还没有发布渠道，客户端不会去检查更新（手动检查时提示"还没有配置更新源"）。
+> 发布渠道：GitHub Releases（[SakuraPure/aurora-player](https://github.com/SakuraPure/aurora-player/releases)）。客户端检查 `https://github.com/SakuraPure/aurora-player/releases/latest/download/latest.json`，即最新一个正式（非草稿、非预发布）Release 里的清单。
+> 0.9.1 是第一个带更新源的版本，0.9.0 及更早的版本需要手动安装一次。
 
 ---
 
@@ -19,13 +20,22 @@
 
 1. 改版本号：`package.json` 的 `version` 与 `src-tauri/Cargo.toml` 的 `version`（`tauri.conf.json` 直接读取 `package.json`）。
 2. 在 `DEVLOG.md` 写好本版本的 `### vX.Y.Z ...` 小节 —— 发布脚本会把它作为更新说明。
-3. 构建：
+3. 提交，打 tag 并推送：
 
    ```bash
-   npm run release -- --base <安装包所在目录的公开地址>
+   git commit -am "..." && git tag v<版本> && git push origin main v<版本>
    ```
 
-   脚本会带上签名私钥执行 `tauri build --bundles nsis`，并在 `src-tauri/target/release/bundle/nsis/` 生成：
+4. 构建并发布：
+
+   ```bash
+   npm run release -- --publish
+   ```
+
+   脚本会带上签名私钥执行 `tauri build --bundles nsis`，在 `src-tauri/target/release/bundle/nsis/` 生成下表的文件；
+   下载地址默认是 `https://github.com/<用户>/<仓库>/releases/download/v<版本>/<安装包>`（仓库由 `endpoints` 推出）。
+   `--publish` 再用 `gh release create v<版本> --verify-tag` 新建 Release、上传安装包和 `latest.json`，更新说明同时作为 Release 正文。
+   gh 先建草稿、附件传完才正式发布，所以客户端不会拿到"有清单、没安装包"的 Release。
 
    | 文件 | 用途 |
    | --- | --- |
@@ -33,26 +43,28 @@
    | `AURORA_<版本>_x64-setup.exe.sig` | 签名（内容已写进 latest.json，不需要单独上传） |
    | `latest.json` | 更新清单：版本、更新说明、发布时间、下载地址、签名 |
 
-4. 上传安装包到 `--base` 指向的位置，再把 `latest.json` 放到 `endpoints` 指向的地址。**先传安装包、后传清单**，避免客户端拿到清单时安装包还不存在。
+   不加 `--publish` 只构建，可以先在本地检查，再手动上传（先传安装包、后传清单）。
+
+5. 验证：`curl -L https://github.com/<用户>/<仓库>/releases/latest/download/latest.json` 应返回新版本号。
 
 > 注意：`createUpdaterArtifacts` 已开启，直接运行 `npx tauri build` 而不提供私钥会构建失败，请用 `npm run release`。
 
 ## 3. 发布渠道
 
-推荐 **GitHub Releases**（免费、带 HTTPS、可以用"最新版"固定链接）：
+当前使用 **GitHub Releases**（免费、带 HTTPS、有"最新版"固定链接）：
 
 - `tauri.conf.json`：
 
   ```json
-  "plugins": { "updater": { "endpoints": ["https://github.com/<用户>/<仓库>/releases/latest/download/latest.json"] } }
+  "plugins": { "updater": { "endpoints": ["https://github.com/SakuraPure/aurora-player/releases/latest/download/latest.json"] } }
   ```
 
-- 发布：`npm run release -- --base https://github.com/<用户>/<仓库>/releases/download/v<版本>`，然后在 GitHub 上新建 tag 为 `v<版本>` 的 Release，上传安装包和 `latest.json`。
-- 仓库设为私有时，Release 附件不能匿名下载，客户端也就取不到更新 —— 需要公开仓库，或另建一个只放发布文件的公开仓库。
+- 仓库必须公开：私有仓库的 Release 附件不能匿名下载，客户端取不到更新。
+- 发预发布版（Pre-release）不会推送给客户端 —— `releases/latest` 只指向正式版。
+- 撤回有问题的版本：把它改成草稿或删除，`latest` 会回到上一个正式版；但已经更新的客户端不会降级，修复只能再发一个更高的版本。
 
-也可以用任意支持 HTTPS 的静态文件服务器 / 对象存储：`endpoints` 指向 `latest.json`，`--base` 指向安装包所在目录。生产环境必须是 HTTPS。
-
-**第一个配置了更新源的版本需要手动安装**；之后的版本都能自动更新。
+换成别的渠道（任意支持 HTTPS 的静态文件服务器 / 对象存储）：`endpoints` 指向 `latest.json`，发布时用 `--base` 指定安装包所在目录。生产环境必须是 HTTPS。
+换渠道后，**第一个带新地址的版本要从旧渠道发布**（或让用户手动安装），之后的版本才会走新地址。
 
 ## 4. 本地测试更新流程（不影响已安装的客户端）
 

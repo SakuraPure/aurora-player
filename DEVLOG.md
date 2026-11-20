@@ -5,7 +5,8 @@
 
 - 技术栈：Vite 8 + TypeScript 7 + three.js 0.187（WebGL2，无框架）；桌面版 Tauri 2（Rust）
 - 网页版：`npm run dev`（网易云接口挂在开发服务器上，`npm run preview` 同样可用；纯静态部署 `dist/` 没有网易云功能）
-- 桌面版：`npm run tauri dev` 开发；`npm run release -- --base <安装包下载地址前缀>` 签名构建 Windows 安装包并生成更新清单（见 [docs/release.md](docs/release.md)）
+- 桌面版：`npm run tauri dev` 开发；`npm run release -- --publish` 签名构建 Windows 安装包、生成更新清单并发布到 GitHub Releases（见 [docs/release.md](docs/release.md)）
+- 仓库：[github.com/SakuraPure/aurora-player](https://github.com/SakuraPure/aurora-player)
 - 视觉原则：简约现代；光晕只作为运动反馈出现，立体感只靠阴影，不用 bloom
 - 网易云接口维护文档：[docs/netease-api.md](docs/netease-api.md)（结构、加密、接口清单、新增接口步骤、故障排查）
 
@@ -26,10 +27,10 @@
 | `src/covers.ts` | 程序化兜底封面（无封面的本地歌曲、网络封面加载失败时）、封面取色 |
 | `src/desktop.ts` | 桌面版专属：标题栏按钮、关闭到托盘、迷你模式布局切换、托盘控制、全局媒体键、自动更新提示 |
 | `src-tauri/src/shell.rs` | 桌面外壳：系统托盘与菜单、迷你模式窗口、退出流程、更新源查询 |
-| `scripts/release.mjs` | 发布：带签名构建安装包，生成自动更新清单 `latest.json` |
+| `scripts/release.mjs` | 发布：带签名构建安装包，生成自动更新清单 `latest.json`，`--publish` 时用 gh 发到 GitHub Releases |
 | `src-tauri/src/ncm.rs` | 桌面版网易云接口：18 个接口的 Rust 实现（weapi 加密），与网页版中间层同名同参 |
 | `src-tauri/src/library.rs` | 桌面版本地曲库：扫描记住的路径、读标签（lofty）、`media` / `cover` 自定义协议（Range + CORS） |
-| `src-tauri/src/lib.rs` | Tauri 入口：注册命令、协议、插件（对话框、全局快捷键） |
+| `src-tauri/src/lib.rs` | Tauri 入口：注册命令、协议、插件（对话框、全局快捷键、窗口记忆、自动更新、重启），关闭到托盘 |
 
 ---
 
@@ -144,6 +145,13 @@
 - 测试（独立标识符的开发版，不碰已安装的客户端）：本地服务器提供更新清单，真实 0.9.0 包下载后签名校验通过；
   篡改签名被拒绝；清单谎报版本号也被拒绝（签名绑定版本）；迷你模式进出、关闭到托盘、退出后窗口大小位置恢复均通过
 
+## 2026-11-20
+
+### v0.9.1 开启自动更新
+- 自动更新上线：新版本发布在 GitHub Releases（[SakuraPure/aurora-player](https://github.com/SakuraPure/aurora-player/releases)），客户端启动后自动检查，托盘"检查更新"可手动检查
+- 从这个版本起，之后的版本都能在客户端里一键更新；0.9.0 及更早的版本需要手动下载安装一次本版本
+- 发布脚本：下载地址默认指向本版本的 GitHub Release；`npm run release -- --publish` 用 gh 新建 Release 并上传安装包与 `latest.json`
+
 ---
 
 ## 踩坑记录
@@ -171,7 +179,7 @@
 - [ ] 无障碍：音柱与封面的键盘导航、读屏文本、`prefers-reduced-motion`
 - [x] 打包：Tauri 桌面应用（v0.6.0）
 - [x] 桌面版：系统托盘 / 迷你模式、记住窗口大小与位置（v0.9.0）
-- [ ] 桌面版自动更新：客户端与发布脚本已完成，待确定发布渠道（推荐 GitHub Releases）并填入 `endpoints`
+- [x] 桌面版自动更新：发布到 GitHub Releases（v0.9.1）
 - [ ] 桌面版网易云接口跟随网易云变动需要自行维护（网页版由 npm 包作者维护）
 - [ ] 性能：空闲时降帧、主包体积（three.js 导致单包 > 500 kB）
 - [ ] 网易云登录态过期后的提示与自动退出
