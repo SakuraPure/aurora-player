@@ -530,14 +530,23 @@ resize()
 const corner = new THREE.Vector3()
 const hidden = new Set<number>()
 
+// 空闲降帧：没在播放、也没有任何操作超过 IDLE_MS，时间渐渐放慢到停止（开屏演示同时收成平缓的呼吸），
+// 画面停稳 SETTLE 秒后主循环不再渲染；任何操作、播放状态变化、窗口重新可见都会立即唤醒
+const IDLE_MS = 20000, SETTLE = 3
+let lastInput = performance.now(), calm = 0, still = 0
+
 function tick(now: number) {
   const dt = clamp((now - last) / 1000, 0, 1 / 30)
   last = now
-  t += dt
+  const idle = !player.playing && performance.now() - lastInput > IDLE_MS
+  calm = clamp(calm + (idle ? dt / 2.5 : -dt / 0.5), 0, 1)
+  still = calm >= 1 ? still + dt : 0
+  t += dt * (1 - ease(calm))
   U.uTime.value = t
   intro = Math.min(1, intro + dt * 0.6)
   const introE = ease(intro)
 
+  spectrum.calm = ease(calm)
   spectrum.update(t, dt)
   app.frame()
 
@@ -676,11 +685,25 @@ function tick(now: number) {
 }
 
 let frozen = false // 开发调试：冻结实时帧，便于逐帧检查动画
+let running = true, frames = 0
 function frame(now: number) {
   if (!frozen) tick(now)
-  requestAnimationFrame(frame)
+  frames++
+  running = still < SETTLE
+  if (running) requestAnimationFrame(frame)
 }
 requestAnimationFrame(frame)
+function wake() {
+  lastInput = performance.now()
+  if (running) return
+  running = true
+  still = 0 // 第一帧 dt 可能为 0，不清零会立刻再次判定"已停稳"
+  last = performance.now()
+  requestAnimationFrame(frame)
+}
+for (const ev of ['pointermove', 'pointerdown', 'wheel', 'keydown', 'resize']) addEventListener(ev, wake, { passive: true })
+document.addEventListener('visibilitychange', wake)
+player.on(wake)
 
 // 开发调试：浏览器面板隐藏时 rAF 不运行，可用 __dbg.run(秒, ndcX, ndcY) 手动推进
 if (import.meta.env.DEV) {
@@ -690,5 +713,5 @@ if (import.meta.env.DEV) {
     simNow = Math.max(simNow, last)
     for (let i = 0; i < sec * 60; i++) tick((simNow += 1000 / 60))
   }
-  Object.assign(window, { __dbg: { run, freeze: (f: boolean) => { frozen = f }, onClick, cards, player, locate, get state() { return { barsT, stageT, morph, hovered, offset, bgK, bgDir, bgEnabled, bgCur: bgCur?.title, bgFade: bgCurFade, palMix: U.uPalMix.value, pal: U.uPal.value.map((v) => v.toArray().map((c) => +c.toFixed(2))) } }, waveYAt } })
+  Object.assign(window, { __dbg: { run, freeze: (f: boolean) => { frozen = f }, onClick, cards, player, locate, get frames() { return frames }, get idle() { return { running, calm, still, sinceInput: performance.now() - lastInput } }, get state() { return { barsT, stageT, morph, hovered, offset, bgK, bgDir, bgEnabled, bgCur: bgCur?.title, bgFade: bgCurFade, palMix: U.uPalMix.value, pal: U.uPal.value.map((v) => v.toArray().map((c) => +c.toFixed(2))) } }, waveYAt } })
 }

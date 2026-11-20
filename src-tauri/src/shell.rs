@@ -29,9 +29,29 @@ pub fn is_mini(app: &AppHandle) -> bool {
 
 pub fn show_main(app: &AppHandle) {
     if let Some(w) = main_window(app) {
+        set_page_visible(&w, true);
         let _ = w.unminimize();
         let _ = w.show();
         let _ = w.set_focus();
+    }
+}
+
+/// 告诉 WebView2 页面是否可见。Tauri 隐藏 / 最小化窗口时不会通知它，页面照常按显示器刷新率渲染；
+/// 设为不可见后页面进入 hidden 状态：动画帧停止、计时器节流，音乐照常播放。
+fn set_page_visible(w: &WebviewWindow, visible: bool) {
+    #[cfg(windows)]
+    let _ = w.with_webview(move |wv| unsafe {
+        let _ = wv.controller().SetIsVisible(visible);
+    });
+    #[cfg(not(windows))]
+    let _ = (w, visible);
+}
+
+/// 窗口隐藏、最小化、还原后同步页面可见性
+pub fn sync_page_visible(app: &AppHandle) {
+    if let Some(w) = main_window(app) {
+        let visible = w.is_visible().unwrap_or(true) && !w.is_minimized().unwrap_or(false);
+        set_page_visible(&w, visible);
     }
 }
 

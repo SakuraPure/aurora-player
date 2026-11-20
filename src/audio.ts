@@ -6,6 +6,8 @@ const BANDS = 64
 export class Spectrum {
   bands = new Float32Array(BANDS) // 0 = 低频, 1 = 高频, 值 0..1
   level = 0
+  /** 0..1：空闲时开屏演示逐渐收成暂停时的平缓呼吸 */
+  calm = 0
   readonly el = new Audio()
   private ctx: AudioContext | null = null
   private analyser: AnalyserNode | null = null
@@ -63,6 +65,7 @@ export class Spectrum {
     for (let k = 0; k < BANDS; k++) {
       const b = k / (BANDS - 1)
       let v: number
+      const quiet = 0.06 + 0.04 * Math.sin(t * 1.2 + b * 6)
       if (real) {
         // 对数频率映射 30Hz – 15kHz
         const sr = this.ctx!.sampleRate, n = this.freq!.length
@@ -78,9 +81,9 @@ export class Spectrum {
           (0.18 + 0.32 * mel) * (1 - b * 0.55) +
           b * b * 0.35 * hat +
           0.08 * shimmer
-        v *= 0.82
+        v = v * 0.82 + (quiet - v * 0.82) * this.calm
       } else {
-        v = 0.06 + 0.04 * Math.sin(t * 1.2 + b * 6)
+        v = quiet
       }
       v = Math.min(v, 1.15)
       const cur = this.bands[k]

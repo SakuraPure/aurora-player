@@ -74,13 +74,20 @@ pub fn run() {
       let app = ctx.app_handle().clone();
       std::thread::spawn(move || responder.respond(app.state::<library::Library>().cover(&req)));
     })
-    // 关闭窗口 = 隐藏到托盘，音乐继续播放；托盘菜单"退出"才真正退出
     .on_window_event(|w, e| {
-      if let tauri::WindowEvent::CloseRequested { api, .. } = e {
-        if w.label() == "main" {
+      if w.label() != "main" {
+        return;
+      }
+      match e {
+        // 关闭窗口 = 隐藏到托盘，音乐继续播放；托盘菜单"退出"才真正退出
+        tauri::WindowEvent::CloseRequested { api, .. } => {
           api.prevent_close();
           let _ = w.hide();
+          shell::sync_page_visible(w.app_handle());
         }
+        // 最小化 / 还原都会触发 Resized：同步页面可见性，最小化时停止渲染
+        tauri::WindowEvent::Resized(_) => shell::sync_page_visible(w.app_handle()),
+        _ => {}
       }
     })
     .setup(|app| {

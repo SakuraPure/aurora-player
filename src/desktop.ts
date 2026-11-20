@@ -17,7 +17,8 @@ export async function initDesktop(player: Player, hooks: DesktopHooks) {
   const win = getCurrentWindow()
   $('win-min').addEventListener('click', () => win.minimize())
   $('win-max').addEventListener('click', () => win.toggleMaximize())
-  $('win-close').addEventListener('click', () => win.hide()) // 关闭 = 隐藏到托盘，音乐继续；托盘菜单里"退出"才真正退出
+  // 关闭 = 隐藏到托盘，音乐继续；托盘菜单里"退出"才真正退出（由 Rust 的 CloseRequested 统一处理，同时让页面停止渲染）
+  $('win-close').addEventListener('click', () => win.close())
 
   // ---------------- 迷你模式：窗口缩成置顶的小播放条，波形留在背后 ----------------
   $('win-mini').addEventListener('click', () => invoke('mini_mode', { on: true }))
