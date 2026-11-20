@@ -247,7 +247,12 @@ const ui = {
   lbNo: $('lb-no'), lbTitle: $('lb-title'), lbAlbum: $('lb-album'), lbArtist: $('lb-artist'), lbDur: $('lb-dur'), lbCta: $('lb-cta'),
 }
 const app = initUI(player, { locate })
-if (inApp) import('./desktop').then((d) => d.initDesktop(player, app.toast))
+if (inApp) {
+  import('./desktop').then((d) => d.initDesktop(player, {
+    toast: app.toast,
+    onMini: (on) => { if (on) { backToWave(); app.closePanel() } }, // 迷你模式只保留波形与播放条
+  }))
+}
 // 换了曲库：收起所有封面
 let shownList = player.list
 player.on(() => {

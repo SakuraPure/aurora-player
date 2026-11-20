@@ -1,6 +1,6 @@
 [package]
 name = "aurora"
-version = "0.8.0"
+version = "0.9.0"
 description = "AURORA 极光韵境音乐播放器"
 authors = ["SakuraPure"]
 license = ""
@@ -21,7 +21,7 @@ tauri-build = { version = "2.7.6", features = [] }
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 log = "0.4"
-tauri = { version = "2.12.7", features = [] }
+tauri = { version = "2.12.7", features = ["tray-icon"] }
 tauri-plugin-log = "2"
 # 网易云接口：HTTP + weapi 加密（AES-CBC + RSA）+ 登录二维码
 reqwest = { version = "0.12", features = ["json", "gzip"] }
@@ -40,6 +40,10 @@ tauri-plugin-dialog = "2"
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 # 全局媒体键（播放/暂停、上一首、下一首）
 tauri-plugin-global-shortcut = "2"
+# 记住窗口大小与位置；自动更新（签名校验）+ 更新后重启
+tauri-plugin-window-state = "2"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

@@ -9,7 +9,9 @@
     <canvas id="gl"></canvas>
     <!-- 桌面版：无边框窗口的拖动条与窗口按钮（网页版隐藏） -->
     <div class="titlebar" data-tauri-drag-region>
+      <button class="update-pill" id="update-pill" hidden></button>
       <div class="win-ctrl">
+        <button id="win-mini" aria-label="迷你模式" title="迷你模式"><svg viewBox="0 0 12 12"><rect x="1.5" y="2.5" width="9" height="7" rx="1" /><rect x="5.5" y="6" width="4" height="2.6" rx="0.5" fill="currentColor" stroke="none" /></svg></button>
         <button id="win-min" aria-label="最小化"><svg viewBox="0 0 12 12"><path d="M2 6.5h8" /></svg></button>
         <button id="win-max" aria-label="最大化"><svg viewBox="0 0 12 12"><rect x="2.5" y="2.5" width="7" height="7" rx="1" /></svg></button>
         <button id="win-close" class="close" aria-label="关闭"><svg viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6" /></svg></button>
@@ -120,6 +122,7 @@
         <div class="np-qmenu" id="np-qmenu" hidden></div>
       </div>
       <button class="np-ico np-mode" id="np-mode" aria-label="播放模式"></button>
+      <button class="np-ico mini-exit" id="mini-exit" aria-label="返回完整窗口" title="返回完整窗口"><svg viewBox="0 0 24 24"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg></button>
       <div class="np-vol">
         <button class="np-ico" id="np-mute" aria-label="静音"><svg viewBox="0 0 24 24"><path d="M4 9.5h3.2L12 5.6v12.8l-4.8-3.9H4z" /><path class="v-wave" d="M15.5 9a4 4 0 0 1 0 6M17.8 6.6a7.4 7.4 0 0 1 0 10.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg></button>
         <div class="np-vtrack" id="np-vtrack"><i id="np-vfill"></i></div>

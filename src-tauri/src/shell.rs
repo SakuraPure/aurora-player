@@ -1,0 +1,155 @@
+//! 桌面外壳：系统托盘、关闭到托盘、迷你模式；窗口大小 / 位置由 window-state 插件记忆。
+//! 播放控制类的托盘菜单通过 "tray" 事件交给前端播放器处理；迷你模式切换后发 "mini" 事件让前端换布局。
+
+use std::sync::Mutex;
+use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use tauri::{AppHandle, Emitter, LogicalSize, Manager, PhysicalPosition, PhysicalSize, Position, Size, WebviewWindow};
+
+/// 迷你窗口尺寸（逻辑像素）与普通窗口的最小尺寸
+const MINI: (f64, f64) = (400.0, 96.0);
+const NORMAL_MIN: (f64, f64) = (900.0, 600.0);
+
+#[derive(Default)]
+pub struct Mini {
+    on: Mutex<bool>,
+    /// 进入迷你模式前的位置、尺寸、是否最大化（退出时恢复）
+    normal: Mutex<Option<(PhysicalPosition<i32>, PhysicalSize<u32>, bool)>>,
+    /// 迷你窗口上次所在位置（本次运行内记住）
+    pos: Mutex<Option<PhysicalPosition<i32>>>,
+}
+
+fn main_window(app: &AppHandle) -> Option<WebviewWindow> {
+    app.get_webview_window("main")
+}
+
+pub fn is_mini(app: &AppHandle) -> bool {
+    *app.state::<Mini>().on.lock().unwrap()
+}
+
+pub fn show_main(app: &AppHandle) {
+    if let Some(w) = main_window(app) {
+        let _ = w.unminimize();
+        let _ = w.show();
+        let _ = w.set_focus();
+    }
+}
+
+/// 迷你窗口默认放在当前屏幕工作区（不含任务栏）的右下角
+fn default_corner(w: &WebviewWindow) -> Option<PhysicalPosition<i32>> {
+    let m = w.current_monitor().ok()??;
+    let (area, k) = (m.work_area(), m.scale_factor());
+    let (ww, hh, gap) = ((MINI.0 * k) as i32, (MINI.1 * k) as i32, (24.0 * k) as i32);
+    Some(PhysicalPosition::new(
+        area.position.x + area.size.width as i32 - ww - gap,
+        area.position.y + area.size.height as i32 - hh - gap,
+    ))
+}
+
+pub fn set_mini(app: &AppHandle, on: bool) -> tauri::Result<()> {
+    let Some(w) = main_window(app) else { return Ok(()) };
+    let st = app.state::<Mini>();
+    {
+        let mut cur = st.on.lock().unwrap();
+        if *cur == on {
+            drop(cur);
+            show_main(app);
+            return Ok(());
+        }
+        *cur = on;
+    }
+    let _ = app.emit("mini", on);
+    if on {
+        let maximized = w.is_maximized()?;
+        *st.normal.lock().unwrap() = Some((w.outer_position()?, w.inner_size()?, maximized));
+        if maximized {
+            w.unmaximize()?;
+        }
+        w.set_min_size(Some(Size::Logical(LogicalSize::new(MINI.0, MINI.1))))?;
+        w.set_size(Size::Logical(LogicalSize::new(MINI.0, MINI.1)))?;
+        w.set_resizable(false)?;
+        w.set_always_on_top(true)?;
+        let pos = (*st.pos.lock().unwrap()).or_else(|| default_corner(&w));
+        if let Some(p) = pos {
+            w.set_position(Position::Physical(p))?;
+        }
+    } else {
+        *st.pos.lock().unwrap() = w.outer_position().ok();
+        w.set_always_on_top(false)?;
+        w.set_resizable(true)?;
+        w.set_min_size(Some(Size::Logical(LogicalSize::new(NORMAL_MIN.0, NORMAL_MIN.1))))?;
+        if let Some((p, s, max)) = st.normal.lock().unwrap().take() {
+            w.set_size(Size::Physical(s))?;
+            w.set_position(Position::Physical(p))?;
+            if max {
+                w.maximize()?;
+            }
+        }
+    }
+    show_main(app);
+    Ok(())
+}
+
+/// 真正退出：先退出迷你模式，让 window-state 记下的是普通窗口的大小和位置
+pub fn quit(app: &AppHandle) {
+    if is_mini(app) {
+        let _ = set_mini(app, false);
+    }
+    app.exit(0);
+}
+
+pub fn create_tray(app: &AppHandle) -> tauri::Result<()> {
+    let item = |id: &str, text: &str| MenuItem::with_id(app, id, text, true, None::<&str>);
+    let menu = Menu::with_items(
+        app,
+        &[
+            &item("toggle", "播放 / 暂停")?,
+            &item("prev", "上一首")?,
+            &item("next", "下一首")?,
+            &PredefinedMenuItem::separator(app)?,
+            &item("mini", "迷你模式 / 完整窗口")?,
+            &item("show", "显示主窗口")?,
+            &PredefinedMenuItem::separator(app)?,
+            &item("update", "检查更新")?,
+            &item("quit", "退出 AURORA")?,
+        ],
+    )?;
+    let mut tray = TrayIconBuilder::with_id("main").tooltip("AURORA").menu(&menu).show_menu_on_left_click(false);
+    if let Some(icon) = app.default_window_icon() {
+        tray = tray.icon(icon.clone());
+    }
+    tray.on_menu_event(|app, e| match e.id().as_ref() {
+        "mini" => {
+            let on = !is_mini(app);
+            let _ = set_mini(app, on);
+        }
+        "show" => show_main(app),
+        "quit" => quit(app),
+        id => {
+            if id == "update" {
+                show_main(app); // 检查结果显示在窗口里
+            }
+            let _ = app.emit("tray", id); // 播放控制 / 检查更新交给前端
+        }
+    })
+    // 左键单击托盘图标：显示主窗口
+    .on_tray_icon_event(|tray, e| {
+        if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = e {
+            show_main(tray.app_handle());
+        }
+    })
+    .build(app)?;
+    Ok(())
+}
+
+/// tauri.conf.json 里配置的更新源（为空表示还没有发布渠道）
+pub fn update_endpoints(app: &AppHandle) -> Vec<String> {
+    app.config()
+        .plugins
+        .0
+        .get("updater")
+        .and_then(|u| u.get("endpoints"))
+        .and_then(|e| e.as_array())
+        .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+        .unwrap_or_default()
+}

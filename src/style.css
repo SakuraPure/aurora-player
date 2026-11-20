@@ -287,3 +287,30 @@ body.is-paused .logo i { animation-play-state: paused; }
 @keyframes fadeIn { from { opacity: 0; } }
 @keyframes pulse { from { opacity: 1; } to { opacity: 0.45; } }
 @keyframes rise { from { opacity: 0; transform: translate(-50%, 30px); } }
+
+/* 桌面版：标题栏里的"发现新版本"提示 */
+.update-pill {
+  position: absolute; top: 6px; right: 200px; padding: 3px 12px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.08); font-size: 11px; letter-spacing: 0.08em; color: #fff; white-space: nowrap; animation: fadeIn 0.6s ease both;
+}
+.update-pill[hidden] { display: none; }
+.update-pill:hover:not(:disabled) { background: rgba(255, 255, 255, 0.16); }
+.update-pill:disabled { cursor: default; opacity: 0.8; }
+
+/* 桌面版迷你模式：窗口缩成置顶的小播放条，波形在背后淡淡流动；只保留封面、标题、上一首/播放/下一首与返回按钮 */
+.mini-exit { display: none; }
+body.mini .brand, body.mini .top-r, body.mini .back, body.mini .hint, body.mini .label, body.mini .panel,
+body.mini .lyric, body.mini .toast, body.mini .titlebar, body.mini .drop, body.mini .np-q, body.mini .np-mode,
+body.mini .np-vol, body.mini #np-cur, body.mini #np-dur { display: none !important; }
+body.mini #gl { opacity: 0.45; pointer-events: none; }
+body.mini .player {
+  inset: 0; left: 0; bottom: 0; transform: none; width: 100%; height: 100%; gap: 12px; padding: 0 10px 0 18px;
+  border: 0; border-radius: 0; background: rgba(10, 11, 15, 0.42); backdrop-filter: none; box-shadow: none; animation: none;
+}
+body.mini .player img { width: 58px; height: 58px; }
+body.mini .np-info { flex: 1; width: auto; }
+body.mini .np-info * { pointer-events: none; } /* 让拖动落在可拖动的容器上 */
+body.mini .np-prog { position: absolute; left: 0; right: 0; bottom: 0; min-width: 0; gap: 0; }
+body.mini .np-track { height: 6px; }
+body.mini .np-track::before, body.mini .np-track i { top: auto; bottom: 0; transform: none; height: 2px !important; border-radius: 0; }
+body.mini .mini-exit { display: grid; }

@@ -1,17 +1,50 @@
-// 桌面版（Tauri）专属：无边框窗口的标题栏按钮、全局媒体键。网页版不加载。
+// 桌面版（Tauri）专属：标题栏按钮、关闭到托盘、迷你模式、托盘控制、全局媒体键、自动更新。网页版不加载。
+import { invoke } from '@tauri-apps/api/core'
+import { listen } from '@tauri-apps/api/event'
 import type { Player } from './player'
 
-export async function initDesktop(player: Player, toast: (msg: string) => void) {
+export interface DesktopHooks {
+  toast(msg: string, ms?: number): void
+  /** 进入 / 退出迷你模式（主画面借此回到波形、收起面板） */
+  onMini(on: boolean): void
+}
+
+export async function initDesktop(player: Player, hooks: DesktopHooks) {
   document.body.classList.add('app')
+  const $ = (id: string) => document.getElementById(id)!
 
   const { getCurrentWindow } = await import('@tauri-apps/api/window')
   const win = getCurrentWindow()
-  const $ = (id: string) => document.getElementById(id)!
   $('win-min').addEventListener('click', () => win.minimize())
   $('win-max').addEventListener('click', () => win.toggleMaximize())
-  $('win-close').addEventListener('click', () => win.close())
+  $('win-close').addEventListener('click', () => win.hide()) // 关闭 = 隐藏到托盘，音乐继续；托盘菜单里"退出"才真正退出
 
-  // 全局媒体键：键盘上的播放/暂停、上一首、下一首（被其他程序占用时静默跳过）
+  // ---------------- 迷你模式：窗口缩成置顶的小播放条，波形留在背后 ----------------
+  $('win-mini').addEventListener('click', () => invoke('mini_mode', { on: true }))
+  $('mini-exit').addEventListener('click', () => invoke('mini_mode', { on: false }))
+  const drag = [document.querySelector('.player')!, document.querySelector('.np-info')!]
+  listen<boolean>('mini', ({ payload: on }) => {
+    document.body.classList.toggle('mini', on)
+    // 迷你模式下整条播放器可拖动窗口（按钮除外）；普通模式下不能
+    drag.forEach((d) => (on ? d.setAttribute('data-tauri-drag-region', '') : d.removeAttribute('data-tauri-drag-region')))
+    hooks.onMini(on)
+  })
+
+  // ---------------- 托盘：播放控制、检查更新；悬停提示当前歌曲 ----------------
+  listen<string>('tray', ({ payload }) => {
+    if (payload === 'toggle') player.toggle()
+    else if (payload === 'prev') player.prev()
+    else if (payload === 'next') player.next()
+    else if (payload === 'update') checkUpdate(true)
+  })
+  let tip = ''
+  player.on(() => {
+    const tr = player.current
+    const text = tr ? `${tr.title} - ${tr.artist}`.slice(0, 120) : 'AURORA'
+    if (text !== tip) invoke('tray_tooltip', { text: (tip = text) })
+  })
+
+  // ---------------- 全局媒体键：播放/暂停、上一首、下一首（被其他程序占用时静默跳过） ----------------
   try {
     const gs = await import('@tauri-apps/plugin-global-shortcut')
     await gs.unregisterAll() // 开发时页面重载会重复注册
@@ -23,6 +56,63 @@ export async function initDesktop(player: Player, toast: (msg: string) => void) 
     })
   } catch (e) {
     console.warn('媒体键注册失败', e)
-    if (import.meta.env.DEV) toast('媒体键注册失败（可能被其他播放器占用）')
+    if (import.meta.env.DEV) hooks.toast('媒体键注册失败（可能被其他播放器占用）')
   }
+
+  // ---------------- 自动更新：启动后静默检查；托盘"检查更新"手动检查 ----------------
+  // 更新包带签名，下载后用内置公钥校验通过才会安装
+  const pill = $('update-pill') as HTMLButtonElement
+  const { getVersion } = await import('@tauri-apps/api/app')
+  const version = await getVersion()
+  let checking = false
+  async function checkUpdate(manual: boolean) {
+    if (checking) return
+    const sources = await invoke<string[]>('update_source').catch(() => [])
+    if (!sources.length) {
+      if (manual) hooks.toast(`当前 v${version} · 还没有配置更新源`)
+      return
+    }
+    checking = true
+    try {
+      const { check } = await import('@tauri-apps/plugin-updater')
+      const up = await check()
+      if (!up) { if (manual) hooks.toast(`已是最新版本 v${version}`); return }
+      offer(up)
+      if (manual) hooks.toast(`发现新版本 v${up.version}`)
+    } catch (e) {
+      if (manual) hooks.toast(`检查更新失败：${e}`)
+    } finally {
+      checking = false
+    }
+  }
+  type Update = NonNullable<Awaited<ReturnType<typeof import('@tauri-apps/plugin-updater').check>>>
+  function offer(up: Update) {
+    pill.hidden = false
+    pill.disabled = false
+    pill.textContent = `新版本 v${up.version} · 点击更新`
+    pill.title = up.body || ''
+    pill.onclick = async () => {
+      pill.disabled = true
+      let total = 0, got = 0
+      try {
+        await up.downloadAndInstall((ev) => {
+          if (ev.event === 'Started') total = ev.data.contentLength || 0
+          else if (ev.event === 'Progress') {
+            got += ev.data.chunkLength
+            pill.textContent = total ? `下载更新 ${Math.round((got / total) * 100)}%` : '下载更新…'
+          } else if (ev.event === 'Finished') pill.textContent = '正在安装…'
+        })
+        const { relaunch } = await import('@tauri-apps/plugin-process')
+        await relaunch()
+      } catch (e) {
+        pill.disabled = false
+        pill.textContent = '更新失败 · 点击重试'
+        hooks.toast(`更新失败：${e}`)
+      }
+    }
+  }
+  setTimeout(() => checkUpdate(false), 4000)
+
+  // 开发调试用
+  if (import.meta.env.DEV) Object.assign(window, { __desktop: { checkUpdate, version } })
 }
