@@ -111,7 +111,7 @@ let t = 0, last = performance.now(), intro = 0, base = 0.4
 let morph = 0 // 0 波形 → 1 柱形
 let stageLin = 0, stageT = 0, stage = 0 // 0 平面 → 1 立体（阴影）
 let offset = 0, offsetT = 0
-let barsT = 0 // 0 波形，1 柱形（点击波形线进入）
+let barsT = 0 // 0 波形，1 柱形（点击波形区域进入）
 let hovered: number | null = null, hovered2D: number | null = null
 let pinned: number | null = null // 从曲库面板定位的音柱：滚动到位后弹出
 let mouseInside = false, downX = 0, downY = 0, lastPrimary = '', lastCta = ''
@@ -151,12 +151,13 @@ function waveYAt(x: number) {
 }
 function pick() {
   ray.setFromCamera(ndc, camera)
-  if (!mouseInside || !ray.ray.intersectPlane(rowPlane, hit)) return { inRegion: false, onLine: false, u: 0 }
+  if (!mouseInside || !ray.ray.intersectPlane(rowPlane, hit)) return { inRegion: false, inWave: false, u: 0 }
   const xn = (hit.x - L.x0) / L.rowW
   const inX = xn > 0.05 && xn < 0.95
   return {
     inRegion: inX && Math.abs(hit.y) < L.amp * 1.3, // 音柱区域，之外即"空白处"
-    onLine: inX && Math.abs(hit.y - waveYAt(hit.x)) < L.amp * 0.22, // 鼠标是否在波形线上
+    // 波形跳动的区域（波峰最高约 1.5 倍振幅）：点这里就进入音柱，不必正好点在跳动的线上
+    inWave: inX && Math.abs(hit.y) < L.amp * 1.5,
     u: (hit.x - L.x0 - offset) / L.slot,
   }
 }
@@ -460,7 +461,7 @@ addEventListener('pointerup', (e) => {
   if (app.panelOpen) app.closePanel()
   else onClick()
 })
-// 波形 --点击波形线--> 柱形 --点击音柱--> 立体 + 封面；任意状态点击空白处 / Esc 返回波形
+// 波形 --点击波形区域--> 柱形 --点击音柱--> 立体 + 封面；任意状态点击空白处 / Esc 返回波形
 function onClick() {
   const pk = pick()
   if (stageT > 0.5) {
@@ -477,7 +478,7 @@ function onClick() {
       popCard(hovered)
       absorb(hovered) // 背景被吸收进弹出的这根音柱
     } else if (!pk.inRegion) backToWave()
-  } else if (pk.onLine) {
+  } else if (pk.inWave) {
     if (player.list.tracks.length) barsT = 1
     else app.openPanel('sources')
   }
@@ -678,8 +679,8 @@ function tick(now: number) {
     lastPrimary = ''
   }
 
-  // 可点击处给出反馈：波形线在鼠标附近微微加粗 + 手型光标
-  const lineHover = barsT < 0.5 && stageT < 0.5 && pk.onLine
+  // 可点击处给出反馈：鼠标在波形区域内时，波形线在鼠标所在的横向位置微微加粗 + 手型光标
+  const lineHover = barsT < 0.5 && stageT < 0.5 && pk.inWave
   U.uNear.value = damp(U.uNear.value, lineHover ? 1 : 0, 10, dt)
   if (lineHover) U.uCursor.value = hit.x
   const clickable = lineHover || (barsT > 0.5 && stageT < 0.5 && pk.inRegion) || (stageT > 0.5 && (pk.inRegion || !!cardAt()))
