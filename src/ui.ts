@@ -54,6 +54,7 @@ export function initUI(player: Player, hooks: UIHooks) {
     el.panel.classList.add('show')
     el.panel.setAttribute('aria-hidden', 'false')
     show(view)
+    recheckAccount(10 * 60e3) // 打开曲库时顺便确认登录状态，失效的话马上就能看到
   }
   const closePanel = () => {
     open = false
@@ -69,11 +70,21 @@ export function initUI(player: Player, hooks: UIHooks) {
   // ---------------- 网易云：账号 / 扫码登录 ----------------
   let profile: ncm.Profile | null = null
   let playlists: ncm.PlaylistInfo[] = []
+  let expired = false // 本次运行中检测到登录失效：提示重新登录，而不是显示成从没登录过
   function renderAccount() {
     el.account.innerHTML = profile
       ? `<img src="${esc(profile.avatarUrl)}?param=60y60" alt="" /><span>${esc(profile.nickname)}</span><button data-act="logout">退出</button>`
+      : expired ? `<span>登录已过期 · 重新扫码即可恢复</span><button data-act="login">重新登录</button>`
       : `<span>未登录 · 可浏览与播放免费歌曲</span><button data-act="login">扫码登录</button>`
   }
+  ncm.onExpired(() => {
+    expired = true
+    profile = null
+    playlists = []
+    renderAccount()
+    renderLists() // 收起私人漫游、每日推荐等需要登录的入口
+    toast('网易云登录已过期 · 打开曲库重新扫码登录', 6000)
+  })
   el.account.addEventListener('click', (e) => {
     const act = (e.target as HTMLElement).dataset.act
     if (act === 'login') startQr()
@@ -99,17 +110,28 @@ export function initUI(player: Player, hooks: UIHooks) {
       if (key !== qrKey || !qrTimer) return
       if (code === 802) { el.qr.classList.add('dim'); el.qrMsg.textContent = '已扫码，请在手机上确认登录' }
       if (code === 800) { clearInterval(qrTimer); qrTimer = 0; el.qr.classList.add('dim'); el.qrMsg.textContent = '二维码已过期，点击二维码刷新' }
-      if (code === 803) { stopQr(); toast('登录成功'); await loadAccount() }
+      if (code === 803) { stopQr(); expired = false; toast('登录成功'); await loadAccount() }
     }, 2000)
   }
   el.qrImg.addEventListener('click', () => { if (!qrTimer) startQr() })
 
+  let checkedAt = 0
   async function loadAccount() {
+    checkedAt = Date.now()
     profile = await ncm.account().catch(() => null)
     playlists = profile ? await ncm.userPlaylists(profile.userId).catch(() => []) : []
     renderAccount()
     renderLists()
   }
+  // 登录失效时网易云多数接口不报错、而是悄悄降级成未登录的内容，只有 user_account 能可靠地说明登录是否还有效：
+  // 距上次确认超过 maxAge 就再确认一次（失效时由 onExpired 处理；网络错误不算失效）
+  function recheckAccount(maxAge: number) {
+    if (!profile || Date.now() - checkedAt < maxAge) return
+    checkedAt = Date.now()
+    ncm.account().catch(() => {})
+  }
+  // 桌面版常驻托盘，可能几天不重启：窗口重新显示时也确认一次
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') recheckAccount(6 * 3600e3) })
 
   // ---------------- 曲库首页：为你推荐 / 榜单 / 发现歌单 / 我的歌单 ----------------
   type Row = { id: string; name: string; count?: number; cover?: string; day?: number; glyph?: string; sub?: string; arrow?: boolean }

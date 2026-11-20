@@ -16,7 +16,9 @@ async function call<T = any>(fn: string, params: Record<string, unknown> = {}): 
     try {
       return await invoke<T>('ncm_call', { fnName: fn, params, cookie })
     } catch (e) {
-      throw new Error(String(e))
+      const msg = String(e)
+      if (/（301）$/.test(msg)) suspect() // ncm.rs 的错误格式："<网易云的提示>（<code>）"
+      throw new Error(msg)
     }
   }
   const r = await fetch(`/api/ncm/${fn}`, {
@@ -25,8 +27,29 @@ async function call<T = any>(fn: string, params: Record<string, unknown> = {}): 
     body: JSON.stringify(params),
   })
   const body = await r.json().catch(() => ({}))
-  if (!r.ok) throw new Error(body?.message || body?.msg || `网易云接口错误 ${r.status}`)
+  if (!r.ok) {
+    if ((body?.code ?? r.status) === 301) suspect()
+    throw new Error(body?.message || body?.msg || `网易云接口错误 ${r.status}`)
+  }
   return body
+}
+
+// ---------- 登录失效：本地还存着登录 cookie，但网易云已不认（在别处退出、改密码、长期未用等） ----------
+let onExpire: (() => void) | null = null
+/** 登录失效时回调：界面提示重新扫码 */
+export function onExpired(fn: () => void) { onExpire = fn }
+function expire() {
+  if (!loggedIn()) return
+  cookie = ''
+  localStorage.removeItem(COOKIE_KEY)
+  onExpire?.()
+}
+// 带着登录 cookie 却收到 301（需要登录）：先用 user_account 确认，确实失效才清掉，避免个别接口误报把人登出
+let verifying = false
+function suspect() {
+  if (!loggedIn() || verifying) return
+  verifying = true
+  account().catch(() => {}).finally(() => { verifying = false })
 }
 
 const https = (u?: string) => (u ? u.replace(/^http:\/\//, 'https://') : '')
@@ -77,7 +100,7 @@ export async function qrCheck(key: string): Promise<number> {
 export async function account(): Promise<Profile | null> {
   if (!loggedIn()) return null
   const r = await call('user_account')
-  if (!r.profile) { logout(); return null }
+  if (!r.profile) { expire(); return null } // 网络错误会抛出，不会走到这里：只有网易云明确说"没登录"才算失效
   const { userId, nickname, avatarUrl } = r.profile
   return { userId, nickname, avatarUrl: https(avatarUrl) }
 }
@@ -182,3 +205,6 @@ export async function lyric(id: number): Promise<{ lrc: string; tlrc: string }> 
   const r = await call('lyric', { id })
   return { lrc: r.lrc?.lyric || '', tlrc: r.tlyric?.lyric || '' }
 }
+
+// 开发调试：模拟登录失效（塞一个网易云不认的 cookie）
+if (import.meta.env.DEV) Object.assign(window, { __ncm: { call, setCookie: (c: string) => { cookie = c }, get cookie() { return cookie } } })

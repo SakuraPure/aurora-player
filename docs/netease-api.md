@@ -194,8 +194,26 @@ params=<...>&encSecKey=<...>
 
 - 登录 cookie 保存在 `localStorage` 的 `ncm.cookie`（桌面版保存在 WebView2 的数据目录里，与网页版互不相通）。
 - 是否已登录：cookie 中是否含 `MUSIC_U`（`loggedIn()`）。
-- 启动时调用 `account()`：返回的 `profile` 为空说明登录已失效，会自动清掉本地 cookie。
 - 退出登录：调用 `logout` 并清掉本地 cookie。
+
+### 登录失效（在别处退出、改密码、长期未用等）
+
+网易云对失效的登录 cookie **多数接口不报错，而是悄悄降级成未登录的内容**（2026-11 实测，带一个无效的 `MUSIC_U`）：
+
+| 接口 | 失效时的返回 |
+| --- | --- |
+| `user_account` | `code: 200`，`profile` / `account` 为 `null` —— **唯一可靠的判断依据** |
+| `recommend_songs` | `code: 200`，返回通用的每日推荐（不是个人的） |
+| `personal_fm`、`user_playlist` | `code: 200`，正常返回 |
+| `recommend_resource` | `301` |
+
+处理方式（`src/ncm.ts` 的 `expire()` / `suspect()`，界面在 `src/ui.ts` 的 `onExpired`）：
+
+- `account()` 拿到空 `profile` → `expire()`：清掉本地 cookie，回调界面显示"登录已过期 · 重新扫码即可恢复"、收起需要登录的入口、提示一次。
+- 任何接口在已登录时返回 `301` → `suspect()`：先用 `user_account` 确认，确实失效才 `expire()`，避免个别接口误报把人登出。桌面版从错误信息末尾的 `（301）` 识别，网页版看返回体的 `code` / HTTP 状态。
+- 主动确认的时机：启动时；打开曲库面板时（距上次确认超过 10 分钟）；窗口重新可见时（超过 6 小时，桌面版常驻托盘可能几天不重启）。
+- 网络错误不算失效：`account()` 会抛出，不会走到 `expire()`。
+- 开发调试：开发模式下 `window.__ncm.setCookie('MUSIC_U=无效值')` 可以模拟失效。
 - **不经手密码**：只支持扫码登录。
 
 ---
@@ -277,7 +295,8 @@ cd src-tauri && cargo test --lib -- --ignored
 | 现象 | 可能原因 | 处理 |
 | --- | --- | --- |
 | `-460 检测到您的网络环境存在风险` | 走了 eapi，或请求头 / 设备 cookie 不完整 | 确认走 weapi；对照 npm 包最新的 `util/request.js` 检查 UA、cookie |
-| `301` | 需要登录 | 检查 cookie 是否带上、是否过期（`account()` 返回 null） |
+| `301` | 需要登录 | 已登录时出现会自动确认并处理登录失效（见第 6 节）；未登录时调用了需要登录的接口属正常 |
+| 个人推荐变成了通用内容 | 登录已失效，但该接口不报错 | 打开曲库面板会重新确认登录状态；或检查 `user_account` 的 `profile` |
 | 播放地址 `url` 为空 | 会员歌曲 / 无版权 | 正常现象，界面已有提示 |
 | 只能听 30–45 秒 | `freeTrialInfo` 试听片段 | 需要会员账号 |
 | 扫码一直停在 801 | 未扫码，或 key 过期 | 二维码过期（800）后点二维码刷新 |
