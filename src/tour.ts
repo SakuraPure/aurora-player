@@ -43,7 +43,8 @@ const ICON_NEXT = '<rect x="17" y="6" width="2" height="12" rx="1"/><path d="M6 
 const ICON_FX = '<rect x="3.5" y="5" width="17" height="14" rx="2.6"/><circle cx="9" cy="10" r="1.6"/><path d="M4.2 17.2l4.9-4.4 3.4 3 3.1-2.6 4.2 4"/>'
 const ICON_LIB = '<rect x="4" y="6" width="16" height="1.6" rx="0.8"/><rect x="4" y="11.2" width="11" height="1.6" rx="0.8"/><rect x="4" y="16.4" width="7" height="1.6" rx="0.8"/>'
 const ICON_MODE = '<path d="M4 9.5V8a2 2 0 0 1 2-2h12l-2.5-2.5M20 14.5V16a2 2 0 0 1-2 2H6l2.5 2.5"/>'
-const ICON_VOL = '<path d="M4 9.5h3.2L12 5.6v12.8l-4.8-3.9H4z"/><path d="M15.5 9a4 4 0 0 1 0 6" fill="none" stroke="#eef1f6" stroke-width="1.6" stroke-linecap="round"/>'
+const HEART = 'M12 19.6s-7.6-4.5-7.6-10.2a4.2 4.2 0 0 1 7.6-2.5 4.2 4.2 0 0 1 7.6 2.5c0 5.7-7.6 10.2-7.6 10.2z'
+const ICON_VOL ='<path d="M4 9.5h3.2L12 5.6v12.8l-4.8-3.9H4z"/><path d="M15.5 9a4 4 0 0 1 0 6" fill="none" stroke="#eef1f6" stroke-width="1.6" stroke-linecap="round"/>'
 const icon = (x: number, y: number, s: number, paths: string, cls = 't-fill') => `<g class="${cls}" transform="translate(${x} ${y}) scale(${s})">${paths}</g>`
 const play = (cx: number, cy: number, r: number) =>
   `<circle cx="${cx}" cy="${cy}" r="${r}" fill="rgba(255,255,255,.12)" stroke="rgba(255,255,255,.35)" stroke-width=".8"/><path d="M${cx - r * 0.3} ${cy - r * 0.5}v${r}l${r * 0.85} ${-r * 0.5}z" fill="#fff"/>`
@@ -129,12 +130,13 @@ const ART = {
     ${row(160, 26, '这一行是歌词', 9).replace('<text', '<text text-anchor="middle"')}${dim(160, 38, '外语歌下面还有中文翻译', 6.5, 'middle')}
     <rect x="8" y="54" width="304" height="46" rx="12" fill="rgba(255,255,255,.045)" stroke="rgba(255,255,255,.12)" stroke-width=".8"/>
     ${cover(16, 62, 30)}${row(54, 75, '歌名', 8)}${dim(54, 86, '歌手', 6)}
+    <g transform="translate(77 71) scale(.5)"><path d="${HEART}" fill="#ff6b93"/></g>
     ${icon(98, 70, 0.6, ICON_PREV)}${play(126, 77, 10)}${icon(139, 70, 0.6, ICON_NEXT)}
     ${dim(162, 79, '1:05', 5.5)}<path d="M178 77h48" stroke="rgba(255,255,255,.2)" stroke-width="2" stroke-linecap="round"/><path d="M178 77h18" stroke="#fff" stroke-width="2" stroke-linecap="round"/>${dim(230, 79, '3:42', 5.5)}
     <rect x="248" y="69.5" width="24" height="15" rx="7.5" fill="none" stroke="rgba(255,255,255,.3)" stroke-width=".8"/>${dim(260, 79.6, '极高', 6, 'middle')}
     ${icon(276, 69, 0.64, ICON_MODE, 't-stroke')}${icon(293, 69, 0.62, ICON_VOL)}
-    ${dim(126, 114, '播放控制', 6, 'middle')}${dim(202, 114, '进度', 6, 'middle')}${dim(260, 114, '音质', 6, 'middle')}${dim(284, 114, '模式', 6, 'middle')}${dim(302, 114, '音量', 6, 'middle')}
-    ${kbd(124, 127, '空格', 22)}${dim(152, 136, '播放 / 暂停', 6.5)}`),
+    ${dim(83, 114, '红心', 6, 'middle')}${dim(126, 114, '播放控制', 6, 'middle')}${dim(202, 114, '进度', 6, 'middle')}${dim(260, 114, '音质', 6, 'middle')}${dim(284, 114, '模式', 6, 'middle')}${dim(302, 114, '音量', 6, 'middle')}
+    ${kbd(98, 127, '空格', 22)}${dim(126, 136, '播放 / 暂停', 6.5)}${kbd(180, 127, 'L')}${dim(200, 136, '红心', 6.5)}`),
 
   coverbg: svg(`
     <rect x="-40" width="400" height="150" fill="url(#tbg)"/>
@@ -166,6 +168,7 @@ const ART = {
   keys: `<div class="tour-keys">
     <div><span><kbd>空格</kbd></span>播放 / 暂停</div>
     <div><span><kbd>B</kbd></span>封面背景</div>
+    <div><span><kbd>L</kbd></span>红心（网易云）</div>
     <div><span><kbd>Esc</kbd></span>返回波形</div>
     <div><span><kbd>←</kbd><kbd>→</kbd></span>翻阅封面</div>
     <div><span><kbd>${HELP}</kbd></span>使用教程</div>
@@ -205,7 +208,7 @@ const PAGES: Page[] = [
   },
   {
     title: '播放条', art: ART.player,
-    text: '底部是播放条：上一首 / 播放 / 下一首、进度条、<b>音质</b>（所选音质拿不到时自动降档，按钮显示实际音质）、<b>播放模式</b>（列表循环、随机、单曲循环）<span class="nw">和音量</span>。歌词显示在播放条上方，按 <kbd>空格</kbd> 播放或暂停。',
+    text: '底部是播放条：上一首 / 播放 / 下一首、进度条、<b>音质</b>（所选音质拿不到时自动降档，按钮显示实际音质）、<b>播放模式</b>（列表循环、随机、单曲循环）<span class="nw">和音量</span>，歌词显示在播放条上方。登录网易云后，点歌名旁的<b>红心</b>或按 <kbd>L</kbd>，把这首歌加入「我喜欢的音乐」。',
   },
   {
     title: '封面背景', art: ART.coverbg,

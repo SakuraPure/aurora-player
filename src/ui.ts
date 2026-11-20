@@ -24,7 +24,7 @@ export function initUI(player: Player, hooks: UIHooks) {
     plsView: $('pn-pls'), plsName: $('pn-pls-name'), chips: $('pn-chips'), plsList: $('pn-pls-list'),
     inFolder: $<HTMLInputElement>('in-folder'), inFiles: $<HTMLInputElement>('in-files'), folders: $('pn-folders'), note: $('pn-note'),
     lyric: $('lyric'), toast: $('toast'), drop: $('drop'),
-    img: $<HTMLImageElement>('np-img'), title: $('np-title'), artist: $('np-artist'), btn: $('np-btn'),
+    img: $<HTMLImageElement>('np-img'), title: $('np-title'), artist: $('np-artist'), btn: $('np-btn'), like: $('np-like'),
     cur: $('np-cur'), dur: $('np-dur'), seek: $('np-track'), fill: $('np-fill'), mode: $('np-mode'),
     vol: $('np-vtrack'), vfill: $('np-vfill'), mute: $('np-mute'), qbtn: $('np-q'), qmenu: $('np-qmenu'),
   }
@@ -83,12 +83,13 @@ export function initUI(player: Player, hooks: UIHooks) {
     playlists = []
     renderAccount()
     renderLists() // 收起私人漫游、每日推荐等需要登录的入口
+    renderLike()
     toast('网易云登录已过期 · 打开曲库重新扫码登录', 6000)
   })
   el.account.addEventListener('click', (e) => {
     const act = (e.target as HTMLElement).dataset.act
     if (act === 'login') startQr()
-    if (act === 'logout') { ncm.logout(); profile = null; playlists = []; renderAccount(); renderLists(); toast('已退出网易云账号') }
+    if (act === 'logout') { ncm.logout(); profile = null; playlists = []; renderAccount(); renderLists(); renderLike(); toast('已退出网易云账号') }
   })
 
   let qrTimer = 0, qrKey = ''
@@ -119,9 +120,11 @@ export function initUI(player: Player, hooks: UIHooks) {
   async function loadAccount() {
     checkedAt = Date.now()
     profile = await ncm.account().catch(() => null)
+    if (profile) ncm.loadLiked(profile.userId).then(renderLike, () => {})
     playlists = profile ? await ncm.userPlaylists(profile.userId).catch(() => []) : []
     renderAccount()
     renderLists()
+    renderLike()
   }
   // 登录失效时网易云多数接口不报错、而是悄悄降级成未登录的内容，只有 user_account 能可靠地说明登录是否还有效：
   // 距上次确认超过 maxAge 就再确认一次（失效时由 onExpired 处理；网络错误不算失效）
@@ -540,6 +543,39 @@ export function initUI(player: Player, hooks: UIHooks) {
   addEventListener('pointerdown', (e) => { if (!el.qmenu.hidden && !(e.target as HTMLElement).closest('.np-q')) closeQ() })
   addEventListener('keydown', (e) => { if (e.key === 'Escape' && !el.qmenu.hidden) { closeQ(); e.stopImmediatePropagation() } }, true)
 
+  // ---------------- 红心：登录后播放网易云歌曲时出现；点击立即变化，请求失败再恢复 ----------------
+  function renderLike() {
+    const id = player.current?.ncmId
+    const on = ncm.isLiked(id)
+    el.like.hidden = !id || !profile
+    el.like.classList.toggle('on', on)
+    el.like.setAttribute('aria-pressed', String(on))
+    el.like.title = on ? '取消红心（L）' : '红心（L）'
+  }
+  let liking = false // 上一次请求还没回来时不再切换，避免请求先后错乱
+  async function toggleLike() {
+    const tr = player.current
+    if (!tr || liking) return
+    if (!tr.ncmId) return toast('本地音乐不能红心', 1600)
+    if (!profile) return toast('登录网易云后可以红心', 2000)
+    const on = !ncm.isLiked(tr.ncmId)
+    liking = true
+    const job = ncm.like(tr.ncmId, on)
+    renderLike()
+    el.like.classList.remove('pop')
+    if (on) { void el.like.offsetWidth; el.like.classList.add('pop') } // 重新触发动画
+    try {
+      await job
+      toast(on ? '已加入「我喜欢的音乐」' : '已从「我喜欢的音乐」移除', 1600)
+    } catch (e) {
+      toast(`${on ? '红心' : '取消红心'}失败：${(e as Error).message}`)
+    }
+    liking = false
+    renderLike()
+  }
+  el.like.addEventListener('click', toggleLike)
+  el.like.addEventListener('animationend', (e) => { if (e.animationName === 'likeRing') el.like.classList.remove('pop') })
+
   let shownKey = '-'
   function renderNP() {
     const tr = player.current
@@ -560,6 +596,7 @@ export function initUI(player: Player, hooks: UIHooks) {
     el.libName.textContent = player.list.name || '曲库'
     el.libCount.textContent = player.list.tracks.length ? `${player.list.tracks.length} 首` : ''
     if (open && !el.listView.hidden) renderTracks()
+    renderLike()
     renderQuality()
     paintProgress()
   }
@@ -606,5 +643,5 @@ export function initUI(player: Player, hooks: UIHooks) {
     booting = false
   })()
 
-  return { toast, frame, openPanel, closePanel, get panelOpen() { return open }, get booting() { return booting } }
+  return { toast, frame, openPanel, closePanel, toggleLike, get panelOpen() { return open }, get booting() { return booting } }
 }

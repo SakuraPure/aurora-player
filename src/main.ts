@@ -502,6 +502,7 @@ addEventListener('keydown', (e) => {
     player.toggle()
   }
   if (e.key === 'b' || e.key === 'B') fxBtn.click()
+  if ((e.key === 'l' || e.key === 'L') && !e.ctrlKey && !e.metaKey) app.toggleLike()
   if (stageT > 0.5 && e.key === 'ArrowLeft') offsetT += L.slot
   if (stageT > 0.5 && e.key === 'ArrowRight') offsetT -= L.slot
 })

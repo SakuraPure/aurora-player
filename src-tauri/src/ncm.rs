@@ -210,6 +210,11 @@ impl Ncm {
             "user_playlist" => {
                 self.req("/api/user/playlist", json!({ "uid": s("uid"), "limit": n("limit", 30), "offset": n("offset", 0), "includeVideo": true }), cookie).await
             }
+            // 红心 / 取消红心（like 为 "false" 时取消）；likelist 返回红心歌曲的 id（无序）
+            "like" => {
+                self.req("/api/radio/like", json!({ "alg": "itembased", "trackId": s("id"), "like": s("like") != "false", "time": "3" }), cookie).await
+            }
+            "likelist" => self.req("/api/song/like/get", json!({ "uid": s("uid") }), cookie).await,
             "logout" => self.req("/api/logout", json!({}), cookie).await,
             _ => Err(format!("未知接口：{name}")),
         }

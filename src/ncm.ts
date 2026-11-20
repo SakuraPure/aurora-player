@@ -42,6 +42,7 @@ function expire() {
   if (!loggedIn()) return
   cookie = ''
   localStorage.removeItem(COOKIE_KEY)
+  liked.clear()
   onExpire?.()
 }
 // 带着登录 cookie 却收到 301（需要登录）：先用 user_account 确认，确实失效才清掉，避免个别接口误报把人登出
@@ -108,6 +109,24 @@ export function logout() {
   if (cookie) call('logout').catch(() => {})
   cookie = ''
   localStorage.removeItem(COOKIE_KEY)
+  liked.clear()
+}
+
+// ---------- 红心（加入 / 移出「我喜欢的音乐」） ----------
+const liked = new Set<number>()
+export const isLiked = (id?: number) => !!id && liked.has(id)
+/** 登录后取一次红心歌曲列表：在官方 App 或别的设备上红心过的歌也显示为已红心 */
+export async function loadLiked(uid: number) {
+  const r = await call('likelist', { uid })
+  liked.clear()
+  for (const id of r.ids || []) liked.add(id)
+}
+/** 先改本地状态（界面立即变化），请求失败时恢复并抛出 */
+export async function like(id: number, on: boolean) {
+  const flip = (v: boolean) => (v ? liked.add(id) : liked.delete(id))
+  flip(on)
+  // 网页版的接口库只把字符串 'false' 当作取消，布尔 false 会被当成红心
+  try { await call('like', { id, like: String(on) }) } catch (e) { flip(!on); throw e }
 }
 
 // ---------- 歌单 / 搜索 ----------

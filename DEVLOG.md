@@ -193,6 +193,14 @@
 - GitHub Actions：`.github/workflows/macos.yml` 手动触发，在 macOS 机器上构建通用安装包（Apple 芯片 + Intel），产物是 dmg；
   更新签名私钥不上传 GitHub，所以 macOS 构建不带自动更新包，也还没加进 `latest.json`
 
+## 2026-11-21
+
+### v0.9.6 网易云红心
+- 播放条的歌名旁新增红心：登录网易云后播放网易云歌曲时出现，点一下把这首歌加入「我喜欢的音乐」，再点一下移出；也可以按 L
+- 登录后会同步账号里已经红心过的歌（包括在官方 App 或其他设备上红心的），播到这些歌时红心是实心的
+- 点击后立即变化，同步失败时恢复原样并提示原因；迷你模式里也能红心
+- 使用教程的「播放条」一页和最后的快捷键汇总补充了红心
+
 ---
 
 ## 踩坑记录
@@ -218,6 +226,11 @@
 - **开发版与已安装版隔离**：`tauri dev --config` 传入临时配置，把 `identifier` 改成 `com.aurora.player.dev`，数据目录、窗口记忆都分开
 - **调试桌面版页面**：启动前设 `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9333` 可用 CDP 执行脚本 / 截图；9222 常被本机 Chrome 占用，换别的端口
 - **浏览器面板隐藏时 rAF 不运行**：开发模式下提供 `__dbg.run(秒, ndcX, ndcY)` 手动推进帧，用于自动化验证
+- **网易云红心的 `like` 参数要传字符串**：npm 包用 `query.like == 'false'` 判断取消，布尔 `false` 不等于 `'false'`，会被当成红心；前端统一传 `'true'` / `'false'`
+- **桌面版模拟接口返回**：`__TAURI_INTERNALS__.invoke` 是只读属性，改不了；Windows 上 IPC 走 `fetch('http://ipc.localhost/<命令>')`，
+  替换 `window.fetch` 拦截即可（响应头带 `Tauri-Response: ok`、`content-type: application/json`）。没有真实账号时用这个办法测登录后的界面
+- **开发窗口被关到托盘时截图**：页面 hidden 时 CDP 截图会卡住；可以另开一个无界面的 Edge（`--headless=new`、独立的 `--user-data-dir`、非 9222 端口）打开网页版截图。
+  CDP 的视口覆盖（`Emulation.setDeviceMetricsOverride`）只在当前会话有效，要和截图放在同一个连接里
 
 ---
 

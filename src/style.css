@@ -100,6 +100,20 @@ body.is-paused .eq i { animation-play-state: paused; }
 .np-ico { flex: none; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; color: rgba(235, 242, 255, 0.7); transition: color 0.2s, background 0.2s; }
 .np-ico:hover { color: #fff; background: rgba(255, 255, 255, 0.07); }
 .np-ico svg { width: 17px; height: 17px; fill: currentColor; }
+/* 红心：未红心是细线描边，红心后填充；红心的那一下轻轻弹起，外圈散开一道光晕 */
+.np-like { position: relative; margin-left: -8px; }
+.np-like[hidden] { display: none; }
+.np-like svg { fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linejoin: round; overflow: visible; transition: fill 0.2s; }
+.np-like.on, .np-like.on:hover { color: #ff6b93; }
+.np-like.on svg { fill: currentColor; }
+.np-like.pop svg { animation: likePop 0.45s cubic-bezier(0.2, 0.8, 0.3, 1.3); }
+.np-like.pop::after {
+  content: ''; position: absolute; inset: 4px; border-radius: 50%; pointer-events: none;
+  box-shadow: 0 0 0 1.5px rgba(255, 107, 147, 0.7), 0 0 14px rgba(255, 107, 147, 0.45); animation: likeRing 0.6s ease-out forwards;
+}
+@keyframes likePop { 0% { transform: scale(0.7); } 55% { transform: scale(1.2); } }
+@keyframes likeRing { from { transform: scale(0.5); opacity: 1; } to { transform: scale(1.45); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .np-like.pop svg, .np-like.pop::after { animation: none; } }
 .np-btn {
   flex: none; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center;
   background: rgba(255, 255, 255, 0.08); border: 1px solid var(--line); transition: 0.25s;

@@ -6,7 +6,7 @@ import { createRequire } from 'node:module'
 const ALLOW = new Set([
   'cloudsearch', 'song_detail', 'song_url_v1', 'lyric', 'playlist_track_all', 'recommend_songs', 'toplist',
   'personalized', 'top_playlist', 'top_playlist_highquality', 'recommend_resource', 'personal_fm',
-  'login_qr_key', 'login_qr_create', 'login_qr_check', 'user_account', 'user_playlist', 'logout',
+  'login_qr_key', 'login_qr_create', 'login_qr_check', 'user_account', 'user_playlist', 'logout', 'like', 'likelist',
 ])
 // 这些参数会改变请求的去向或身份，不接受前端传入
 const STRIP = ['proxy', 'realIP', 'randomCNIP', 'domain', 'headers', 'ua', 'e_r', 'crypto', 'cookie']
@@ -34,7 +34,8 @@ function ncm(): Plugin {
 
     api ??= require('NeteaseCloudMusicApi')
     const query = { ...params, cookie: String(req.headers['x-ncm-cookie'] || ''), timestamp: Date.now() }
-    if (fn === 'song_url_v1') Object.assign(query, { crypto: 'weapi' }) // 默认 eapi 通道在匿名状态下会被风控拦截
+    // 默认 eapi 通道容易被风控拦截（-460），与桌面版一样走 weapi
+    if (fn === 'song_url_v1' || fn === 'likelist') Object.assign(query, { crypto: 'weapi' })
     try {
       const out = await api![fn](query)
       send(out.status || 200, out.body)

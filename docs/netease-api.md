@@ -69,7 +69,7 @@ async function call<T = any>(fn: string, params: Record<string, unknown> = {}): 
 
 ## 3. 加密与请求格式（weapi）
 
-桌面版全部接口、网页版的 `song_url_v1` 都走 weapi。实现见 `ncm.rs` 的 `weapi()`、`rsa_hex()`、`aes_cbc_b64()`。
+桌面版全部接口、网页版的 `song_url_v1` 和 `likelist` 都走 weapi（`like` 在 npm 包里本身就是 weapi）。实现见 `ncm.rs` 的 `weapi()`、`rsa_hex()`、`aes_cbc_b64()`。
 
 1. 业务参数加上 `csrf_token`（取 cookie 里的 `__csrf`，未登录为空串），序列化成 JSON 文本 `text`。
 2. 随机生成 16 位 `secretKey`（字符集 `a-zA-Z0-9`）。
@@ -155,7 +155,19 @@ params=<...>&encSecKey=<...>
 - 扫码状态码：`800` 过期、`801` 等待扫码、`802` 已扫码待确认、`803` 成功。
 - `803` 时 `cookie` 字段是登录 cookie：网页版是 npm 包拼好的 Set-Cookie 原文；桌面版只保留每条 Set-Cookie 的 `name=value`，用 `; ` 连接。两种格式前端都能直接存、直接传回。
 
-### 4.5 固定 ID
+### 4.5 红心（我喜欢的音乐）
+
+| 接口名 | 前端函数 | 网易云路径 | 主要参数 | 关键返回 | 网页版通道 |
+| --- | --- | --- | --- | --- | --- |
+| `likelist` | `loadLiked(uid)`，登录后调用一次 | `/api/song/like/get` | `uid` | `ids[]`：红心歌曲的 id（无序） | **强制 weapi** |
+| `like` | `like(id, on)` | `/api/radio/like` | `trackId`、`like`、`alg: 'itembased'`、`time: '3'` | `code: 200` | weapi |
+
+- 两个接口都需要登录，未登录返回 `301`（2026-11 实测，网页版和桌面版一致）。已登录时的 `301` 照常交给 `suspect()` 确认登录是否失效。
+- **`like` 参数必须传字符串 `'true'` / `'false'`**：npm 包用 `query.like == 'false'` 判断取消，布尔 `false` 会被当成红心。桌面版同样按字符串 `"false"` 判断。
+- 红心状态缓存在 `src/ncm.ts` 的 `liked` 集合里：`like()` 先改本地状态（界面立即变化），请求失败时恢复并抛出；退出登录、登录失效时清空。
+- 红心的歌会进入用户的「我喜欢的音乐」歌单（`user_playlist` 返回的第一个歌单）；这个歌单每次打开都重新拉取，所以不用手动刷新。
+
+### 4.6 固定 ID
 
 | 用途 | ID | 位置 |
 | --- | --- | --- |
