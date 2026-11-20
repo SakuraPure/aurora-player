@@ -7,6 +7,8 @@ export interface DesktopHooks {
   toast(msg: string, ms?: number): void
   /** 进入 / 退出迷你模式（主画面借此回到波形、收起面板） */
   onMini(on: boolean): void
+  /** 打开使用教程（托盘菜单） */
+  tour(): void
 }
 
 export async function initDesktop(player: Player, hooks: DesktopHooks) {
@@ -37,6 +39,11 @@ export async function initDesktop(player: Player, hooks: DesktopHooks) {
     else if (payload === 'prev') player.prev()
     else if (payload === 'next') player.next()
     else if (payload === 'update') checkUpdate(true)
+    else if (payload === 'tour') {
+      // 迷你窗口放不下教程：先回到完整窗口，等布局换回来再打开
+      if (document.body.classList.contains('mini')) invoke('mini_mode', { on: false }).then(() => setTimeout(hooks.tour, 400))
+      else hooks.tour()
+    }
   })
   let tip = ''
   player.on(() => {

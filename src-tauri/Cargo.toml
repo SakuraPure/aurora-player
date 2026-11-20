@@ -1,6 +1,6 @@
 [package]
 name = "aurora"
-version = "0.9.3"
+version = "0.9.4"
 description = "AURORA 极光韵境音乐播放器"
 authors = ["SakuraPure"]
 license = ""

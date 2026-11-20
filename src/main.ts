@@ -4,6 +4,7 @@ import { Player } from './player'
 import { fmt, type Track } from './library'
 import { coverCanvas, extractPalette, type RGB } from './covers'
 import { initUI } from './ui'
+import { initTour } from './tour'
 import { inApp } from './ncm'
 import * as SH from './shaders'
 
@@ -247,10 +248,15 @@ const ui = {
   lbNo: $('lb-no'), lbTitle: $('lb-title'), lbAlbum: $('lb-album'), lbArtist: $('lb-artist'), lbDur: $('lb-dur'), lbCta: $('lb-cta'),
 }
 const app = initUI(player, { locate })
+// 使用教程：第一次打开时等开屏动画走完再弹出；曲库底部、F1、托盘菜单可以重新打开
+const tour = initTour({ beforeOpen: () => app.closePanel() })
+if (!tour.seen) setTimeout(() => tour.open(), 1800)
+$('pn-tour').addEventListener('click', () => tour.open())
 if (inApp) {
   import('./desktop').then((d) => d.initDesktop(player, {
     toast: app.toast,
-    onMini: (on) => { if (on) { backToWave(); app.closePanel() } }, // 迷你模式只保留波形与播放条
+    onMini: (on) => { if (on) { backToWave(); app.closePanel(); tour.close() } }, // 迷你模式只保留波形与播放条
+    tour: () => tour.open(),
   }))
 }
 // 换了曲库：收起所有封面

@@ -130,6 +130,7 @@ pub fn create_tray(app: &AppHandle) -> tauri::Result<()> {
             &item("mini", "迷你模式 / 完整窗口")?,
             &item("show", "显示主窗口")?,
             &PredefinedMenuItem::separator(app)?,
+            &item("tour", "使用教程")?,
             &item("update", "检查更新")?,
             &item("quit", "退出 AURORA")?,
         ],
@@ -146,10 +147,10 @@ pub fn create_tray(app: &AppHandle) -> tauri::Result<()> {
         "show" => show_main(app),
         "quit" => quit(app),
         id => {
-            if id == "update" {
-                show_main(app); // 检查结果显示在窗口里
+            if id == "update" || id == "tour" {
+                show_main(app); // 检查结果、教程显示在窗口里
             }
-            let _ = app.emit("tray", id); // 播放控制 / 检查更新交给前端
+            let _ = app.emit("tray", id); // 播放控制 / 检查更新 / 使用教程交给前端
         }
     })
     // 左键单击托盘图标：显示主窗口
