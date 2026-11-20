@@ -151,6 +151,9 @@
 - 自动更新上线：新版本发布在 GitHub Releases（[SakuraPure/aurora-player](https://github.com/SakuraPure/aurora-player/releases)），客户端启动后自动检查，托盘"检查更新"可手动检查
 - 从这个版本起，之后的版本都能在客户端里一键更新；0.9.0 及更早的版本需要手动下载安装一次本版本
 - 发布脚本：下载地址默认指向本版本的 GitHub Release；`npm run release -- --publish` 用 gh 新建 Release 并上传安装包与 `latest.json`
+- 测试（发布后补记）：公开仓库 + Release v0.9.1 已上线，`releases/latest/download/latest.json` 返回 0.9.1；
+  版本设为 0.9.0 的独立开发版对着线上地址自动检查，标题栏出现"新版本 v0.9.1 · 点击更新"，安装包 4,370,864 字节下载完成、签名校验通过（只下载不安装）
+- 发布脚本修正：DEVLOG 在 Windows 上是 CRLF，更新说明里带了 `\r\n`；读取时统一成 `\n`（v0.9.1 线上的说明里仍是 `\r\n`，不影响显示）
 
 ---
 
@@ -166,6 +169,7 @@
 - **已安装的客户端与开发版共用数据目录**（标识符 com.aurora.player）：安装版运行时再用不同的 WebView2 启动参数开开发版会报 0x8007139F；开发调试前先关掉安装版
 - **window-state 插件的缓存会跟着每次缩放移动更新**：进入迷你模式前必须自己记下普通窗口的位置大小，不能指望插件"恢复"
 - **更新签名绑定版本号**：签名里带有打包时的版本，清单声明的版本不一致会被拒绝 —— 本地测试不能把旧包改个版本号冒充新版，要把开发版的版本调低
+- **GitHub "最新版"链接只认正式版**：`releases/latest/download/...` 跳过草稿和预发布；`gh release create` 带附件时先建草稿、传完再发布，不会出现只有清单的空窗期
 - **开发版与已安装版隔离**：`tauri dev --config` 传入临时配置，把 `identifier` 改成 `com.aurora.player.dev`，数据目录、窗口记忆都分开
 - **调试桌面版页面**：启动前设 `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9333` 可用 CDP 执行脚本 / 截图；9222 常被本机 Chrome 占用，换别的端口
 - **浏览器面板隐藏时 rAF 不运行**：开发模式下提供 `__dbg.run(秒, ndcX, ndcY)` 手动推进帧，用于自动化验证

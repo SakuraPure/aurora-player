@@ -42,7 +42,7 @@ const exe = `AURORA_${pkg.version}_x64-setup.exe`
 const signature = readFileSync(join(dir, `${exe}.sig`), 'utf8').trim()
 
 // 更新说明取 DEVLOG.md 里本版本的小节
-const log = readFileSync('DEVLOG.md', 'utf8')
+const log = readFileSync('DEVLOG.md', 'utf8').replace(/\r\n/g, '\n')
 const m = log.match(new RegExp(`### v${pkg.version.replace(/\./g, '\\.')}[^\\n]*\\n([\\s\\S]*?)(?=\\n##|\\n---)`))
 const notes = m ? m[1].trim() : `AURORA v${pkg.version}`
 
