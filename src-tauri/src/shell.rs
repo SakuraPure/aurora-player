@@ -135,7 +135,13 @@ pub fn create_tray(app: &AppHandle) -> tauri::Result<()> {
             &item("quit", "退出 AURORA")?,
         ],
     )?;
-    let mut tray = TrayIconBuilder::with_id("main").tooltip("AURORA").menu(&menu).show_menu_on_left_click(false);
+    // Windows：左键显示主窗口、右键弹菜单；macOS 菜单栏图标的习惯是单击直接弹菜单
+    let mut tray = TrayIconBuilder::with_id("main").tooltip("AURORA").menu(&menu).show_menu_on_left_click(cfg!(target_os = "macos"));
+    #[cfg(target_os = "macos")]
+    {
+        tray = tray.icon(tray_template()).icon_as_template(true);
+    }
+    #[cfg(not(target_os = "macos"))]
     if let Some(icon) = app.default_window_icon() {
         tray = tray.icon(icon.clone());
     }
@@ -153,14 +159,34 @@ pub fn create_tray(app: &AppHandle) -> tauri::Result<()> {
             let _ = app.emit("tray", id); // 播放控制 / 检查更新 / 使用教程交给前端
         }
     })
-    // 左键单击托盘图标：显示主窗口
+    // 左键单击托盘图标：显示主窗口（macOS 单击是弹菜单，不再额外弹窗口）
     .on_tray_icon_event(|tray, e| {
+        if cfg!(target_os = "macos") {
+            return;
+        }
         if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = e {
             show_main(tray.app_handle());
         }
     })
     .build(app)?;
     Ok(())
+}
+
+/// macOS 菜单栏图标：与应用图标一致的四根音柱，单色模板图（系统按深浅色模式自动着色）
+#[cfg(target_os = "macos")]
+fn tray_template() -> tauri::image::Image<'static> {
+    const S: u32 = 36; // 18pt @2x
+    let mut px = vec![0u8; (S * S * 4) as usize];
+    for (i, h) in [0.40f32, 0.90, 0.60, 0.75].into_iter().enumerate() {
+        let x0 = 4 + i as u32 * 8; // 宽 5、间隔 3
+        let top = 30 - (26.0 * h) as u32; // 底边对齐在 y = 30
+        for y in top..30 {
+            for x in x0..x0 + 5 {
+                px[((y * S + x) * 4 + 3) as usize] = 255; // 模板图只看不透明度
+            }
+        }
+    }
+    tauri::image::Image::new_owned(px, S, S)
 }
 
 /// tauri.conf.json 里配置的更新源（为空表示还没有发布渠道）

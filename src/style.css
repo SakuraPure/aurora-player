@@ -4,7 +4,7 @@
   --glass: rgba(16, 18, 24, 0.55);
   --line: rgba(255, 255, 255, 0.09);
   --aurora: linear-gradient(90deg, #22f5a8, #2ad4ff 40%, #8c6bff 75%, #ff6ad0);
-  font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { width: 100%; height: 100%; overflow: hidden; background: #090a0d; color: var(--fg); }
@@ -277,6 +277,9 @@ body.app .titlebar { display: block; position: fixed; top: 0; left: 0; right: 0;
 .win-ctrl button.close:hover { background: rgba(232, 17, 35, 0.85); }
 body.app .brand { top: 42px; }
 body.app .top-r { top: 44px; }
+/* macOS：系统红绿灯在左上角，自绘的最小化 / 最大化 / 关闭不显示，只留迷你模式按钮 */
+body.mac #win-min, body.mac #win-max, body.mac #win-close { display: none; }
+body.mac .update-pill { right: 58px; }
 body.app .back { top: 40px; }
 body.app .hint { top: 92px; }
 body.app .panel { top: 40px; }
@@ -388,3 +391,4 @@ body.mini .np-prog { position: absolute; left: 0; right: 0; bottom: 0; min-width
 body.mini .np-track { height: 6px; }
 body.mini .np-track::before, body.mini .np-track i { top: auto; bottom: 0; transform: none; height: 2px !important; border-radius: 0; }
 body.mini .mini-exit { display: grid; }
+body.mac.mini .player { padding-left: 80px; } /* 给 macOS 红绿灯让出位置 */

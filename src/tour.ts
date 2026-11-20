@@ -1,8 +1,12 @@
 // 使用教程：首次打开时弹出，一页一页介绍整套交互与主要功能；
-// 曲库面板底部的「使用教程」、F1、桌面版托盘菜单都可以重新打开
+// 曲库面板底部的「使用教程」、F1 / ?、桌面版托盘（macOS 菜单栏）菜单都可以重新打开
 import { inApp } from './ncm'
 
 const SEEN_KEY = 'aurora.tour'
+// macOS 键盘上 F1 默认是调亮度（要按 Fn），教程里提示用 ? 打开
+const MAC = /Mac/.test(navigator.userAgent)
+const HELP = MAC ? '?' : 'F1'
+const TRAY = MAC ? '菜单栏' : '托盘'
 
 // ---------------- 插图（SVG，320×150） ----------------
 const DEFS = `<defs>
@@ -153,7 +157,7 @@ const ART = {
     ${cap(235, 100, '迷你模式：置顶的小播放条')}
     <rect x="22" y="40" width="112" height="80" rx="6" fill="rgba(34,36,44,.97)" stroke="rgba(255,255,255,.12)" stroke-width=".8"/>
     ${['播放 / 暂停', '上一首 / 下一首', '迷你模式 / 完整窗口', '使用教程', '检查更新', '退出 AURORA'].map((t, k) => row(32, 53 + k * 12, t, 6.5)).join('')}
-    ${dim(78, 33, '关闭窗口后留在托盘 · 右键控制', 6, 'middle')}
+    ${dim(78, 33, MAC ? '关闭窗口后留在菜单栏 · 单击控制' : '关闭窗口后留在托盘 · 右键控制', 6, 'middle')}
     <rect x="-40" y="128" width="400" height="22" fill="rgba(255,255,255,.05)"/>
     <circle cx="42" cy="139" r="2" fill="rgba(255,255,255,.35)"/><circle cx="54" cy="139" r="2" fill="rgba(255,255,255,.35)"/>
     <circle cx="70" cy="139" r="8" fill="none" stroke="url(#tg)" stroke-width="1" class="t-pulse"/>
@@ -164,7 +168,7 @@ const ART = {
     <div><span><kbd>B</kbd></span>封面背景</div>
     <div><span><kbd>Esc</kbd></span>返回波形</div>
     <div><span><kbd>←</kbd><kbd>→</kbd></span>翻阅封面</div>
-    <div><span><kbd>F1</kbd></span>使用教程</div>
+    <div><span><kbd>${HELP}</kbd></span>使用教程</div>
     <div><span><kbd>Enter</kbd></span>播放搜到的第一首</div>
   </div>`,
 }
@@ -208,14 +212,16 @@ const PAGES: Page[] = [
     text: '右上角的<b>图片按钮</b>，或按 <kbd>B</kbd>，打开<b>封面背景</b>：当前歌曲的封面铺在波形后面，极光的颜色也取自封面。点开音柱时，背景会被吸收进封面；播放新歌时，再从封面里释放出来。',
   },
   {
-    title: '迷你模式与系统托盘', art: ART.mini, desktop: true,
-    text: '标题栏的<b>迷你模式</b>按钮把窗口缩成一条置顶的小播放条，可以拖动，点右侧按钮回到完整窗口。<b>关闭窗口</b>后 AURORA 留在系统托盘继续播放，右键托盘图标可以控制播放或退出；键盘的<b>媒体键</b>也能直接控制。',
+    title: MAC ? '迷你模式与菜单栏' : '迷你模式与系统托盘', art: ART.mini, desktop: true,
+    text: MAC
+      ? '标题栏的<b>迷你模式</b>按钮把窗口缩成一条置顶的小播放条，可以拖动，点右侧按钮回到完整窗口。<b>关闭窗口</b>后 AURORA 留在菜单栏继续播放，单击菜单栏里的图标可以控制播放或退出；点<b>程序坞</b>图标重新打开窗口。'
+      : '标题栏的<b>迷你模式</b>按钮把窗口缩成一条置顶的小播放条，可以拖动，点右侧按钮回到完整窗口。<b>关闭窗口</b>后 AURORA 留在系统托盘继续播放，右键托盘图标可以控制播放或退出；键盘的<b>媒体键</b>也能直接控制。',
   },
   {
     title: '准备好了', art: ART.keys,
     text: inApp
-      ? '以上就是全部操作。忘了的话，随时按 <kbd>F1</kbd>、点曲库底部的「使用教程」，或者从托盘菜单重新打开这份教程。'
-      : '以上就是全部操作。忘了的话，随时按 <kbd>F1</kbd>，或点曲库底部的「使用教程」重新打开这份教程。',
+      ? `以上就是全部操作。忘了的话，随时按 <kbd>${HELP}</kbd>、点曲库底部的「使用教程」，或者从${TRAY}菜单重新打开这份教程。`
+      : `以上就是全部操作。忘了的话，随时按 <kbd>${HELP}</kbd>，或点曲库底部的「使用教程」重新打开这份教程。`,
   },
 ]
 
@@ -226,6 +232,8 @@ export interface TourHooks {
 
 export function initTour(hooks: TourHooks) {
   const pages = PAGES.filter((p) => inApp || !p.desktop)
+  const entryKey = document.querySelector('#pn-tour kbd')
+  if (entryKey) entryKey.textContent = HELP
   const root = document.createElement('div')
   root.className = 'tour'
   root.setAttribute('role', 'dialog')

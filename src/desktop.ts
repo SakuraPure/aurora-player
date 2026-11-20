@@ -13,6 +13,8 @@ export interface DesktopHooks {
 
 export async function initDesktop(player: Player, hooks: DesktopHooks) {
   document.body.classList.add('app')
+  // macOS 用系统的红绿灯按钮（tauri.macos.conf.json：标题栏覆盖在页面上），自绘的窗口按钮隐藏
+  if (/Mac/.test(navigator.userAgent)) document.body.classList.add('mac')
   const $ = (id: string) => document.getElementById(id)!
 
   const { getCurrentWindow } = await import('@tauri-apps/api/window')

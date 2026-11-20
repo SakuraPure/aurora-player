@@ -112,12 +112,16 @@ pub fn run() {
     .build(tauri::generate_context!())
     .expect("error while building tauri application");
 
-  app.run(|app, event| {
+  app.run(|app, event| match event {
     // 任何方式退出（包括系统关机注销）时若还在迷你模式，先恢复普通窗口，保证记住的是普通窗口的大小位置
-    if let tauri::RunEvent::ExitRequested { .. } = event {
+    tauri::RunEvent::ExitRequested { .. } => {
       if shell::is_mini(app) {
         let _ = shell::set_mini(app, false);
       }
     }
+    // macOS：窗口关到菜单栏后，点程序坞图标重新打开
+    #[cfg(target_os = "macos")]
+    tauri::RunEvent::Reopen { .. } => shell::show_main(app),
+    _ => {}
   });
 }
